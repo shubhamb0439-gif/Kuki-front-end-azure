@@ -94,14 +94,9 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
 
   const fetchUnreadMessages = async () => {
     if (!user) return;
-
-    const { count } = await supabase
-      .from('statements')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('read', false);
-
-    setUnreadMessages(count || 0);
+    const { data } = await messages.list();
+    const unread = (data || []).filter((m: any) => !m.is_read);
+    setUnreadMessages(unread.length);
   };
 
   const loadAdsStatus = async () => {
@@ -116,35 +111,10 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
   };
 
   const loadEmployerStatuses = async () => {
-    if (!user?.profession || linkedEmployers.length === 0) return;
-
-    const employerIds = linkedEmployers.map(e => e.id);
-    const { data: jobPostings } = await supabase
-      .from('job_postings')
-      .select('employer_id, profession')
-      .in('employer_id', employerIds)
-      .eq('profession', user.profession)
-      .eq('status', 'active');
-
-    const employersSeekingReplacement = new Set(
-      jobPostings?.map(jp => jp.employer_id) || []
-    );
-
+    if (linkedEmployers.length === 0) return;
     const statuses: Record<string, {showRing: boolean; color: string; text: string}> = {};
     linkedEmployers.forEach(employer => {
-      if (employersSeekingReplacement.has(employer.id)) {
-        statuses[employer.id] = {
-          showRing: true,
-          color: '#dc2626',
-          text: 'Seeking Replacement'
-        };
-      } else {
-        statuses[employer.id] = {
-          showRing: false,
-          color: '',
-          text: ''
-        };
-      }
+      statuses[employer.id] = { showRing: false, color: '', text: '' };
     });
     setEmployerStatuses(statuses);
   };
@@ -154,13 +124,9 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
     const status = await getEmployeeOwnStatus(user.id);
     setEmployeeStatus(status);
 
-    const { data: ratings } = await supabase
-      .from('performance_ratings')
-      .select('rating')
-      .eq('employee_id', user.id);
-
+    const { data: ratings } = await admin.ratings.listByEmployee(user.id);
     if (ratings && ratings.length > 0) {
-      const avgRating = ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length;
+      const avgRating = ratings.reduce((sum: number, r: any) => sum + r.rating, 0) / ratings.length;
       setEmployeeRating(Math.round(avgRating));
     } else {
       setEmployeeRating(5);
@@ -230,97 +196,23 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
 
     setLoading(true);
     try {
-      // Parse QR code: qr:type:employer_id:employee_id:timestamp OR qr:type:employer_id:employee_id:date:timestamp
-      const parts = qrCode.split(':');
-      if ((parts.length !== 5 && parts.length !== 6) || parts[0] !== 'qr') {
-        throw new Error('Invalid QR code format');
+      const { data, error } = await qrTransactions.process({ qr_code: qrCode });
+
+      if (error) {
+        throw new Error('Invalid or already used QR code');
       }
 
-      const transactionType = parts[1] as 'pay_wages' | 'settle_loan' | 'mark_attendance' | 'foreclose_loan' | 'grant_loan' | 'pay_contract_wages';
-      const employerId = parts[2];
-      const qrEmployeeId = parts[3];
-      const attendanceDate = parts.length === 6 ? parts[4] : null;
-
-      // Find the employee record for this user
-      const { data: empList } = await employees.list();
-      const employeeRecord = (empList || []).find(
-        (e: any) => e.employer_id === employerId
-      );
-
-      if (!employeeRecord) {
-        throw new Error('You are not linked to this employer');
+      if (!data?.success) {
+        throw new Error('Invalid or already used QR code');
       }
 
-      // Find the pending transaction
-      const { data: transaction } = await qrTransactions.get(qrCode);
+      const typeLabel = (data.transaction_type || 'Transaction')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (l: string) => l.toUpperCase());
 
-      if (!transaction || transaction.status !== 'pending') {
-        throw new Error('QR code not found or already used');
-      }
-
-      // For universal attendance, employee_id is 'universal'
-      if (transactionType === 'mark_attendance' && qrEmployeeId === 'universal') {
-        await handleAttendance(employeeRecord.user_id, employerId, attendanceDate);
-
-        // Update transaction
-        await supabase
-          .from('qr_transactions')
-          .update({
-            scanned_at: new Date().toISOString(),
-            status: 'completed'
-          })
-          .eq('id', transaction.id);
-
-        showSuccess('Attendance Marked', 'Your attendance has been marked successfully!');
-        setLoading(false);
-        return;
-      }
-
-      // Check if this QR code is for this specific employee
-      if (employeeRecord.id !== qrEmployeeId) {
-        throw new Error('This QR code is not for you');
-      }
-
-      // For specific employee attendance QR codes
-      if (transactionType === 'mark_attendance') {
-        await handleAttendance(employeeRecord.user_id, employerId, attendanceDate);
-
-        // Update transaction
-        await qrTransactions.update(transaction.id, {
-          scanned_at: new Date().toISOString(),
-          status: 'completed'
-        });
-
-        showSuccess('Attendance Marked', 'Your attendance has been marked successfully!');
-        setLoading(false);
-        return;
-      }
-
-      // Update transaction for non-attendance types
-      const { error: updateError } = await qrTransactions.update(transaction.id, {
-        scanned_at: new Date().toISOString(),
-        status: 'completed'
-      });
-
-      if (updateError) throw new Error(updateError);
-
-      // Process based on transaction type
-      if (transactionType === 'pay_wages') {
-        await handleWagePayment(employeeRecord.id, employerId);
-      } else if (transactionType === 'settle_loan') {
-        await handleLoanSettlement(employeeRecord.id, employerId);
-      } else if (transactionType === 'foreclose_loan') {
-        await handleLoanForeclosure(employeeRecord.id, employerId, transaction.metadata);
-      } else if (transactionType === 'grant_loan') {
-        await handleLoanGrant(employeeRecord.id, employerId, transaction.metadata);
-      } else if (transactionType === 'pay_contract_wages') {
-        await handleContractWagePayment(employeeRecord.id, employerId, transaction.metadata);
-      }
-
-      const actionName = transactionType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      showSuccess('Transaction Completed', `${actionName} completed successfully!`);
+      showSuccess('Transaction Completed', `${typeLabel} completed successfully!`);
     } catch (error: any) {
-      showError('Transaction Failed', error.message);
+      showError('Transaction Failed', error.message || 'Invalid or already used QR code');
     } finally {
       setLoading(false);
     }

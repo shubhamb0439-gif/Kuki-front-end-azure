@@ -225,25 +225,15 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
 
   const loadJobs = async () => {
     if (!user) return;
-
-    let query = supabase
-      .from('job_postings')
-      .select('*')
-      .eq('status', 'active')
-      .order('created_at', { ascending: false });
-
-    // For employers, show only their jobs
-    if (user.role === 'employer') {
-      query = query.eq('employer_id', user.id);
-    } else if (user.role === 'employee' && user.profession) {
-      // For employees, show only jobs matching their profession, excluding their own posts
-      query = query.eq('profession', user.profession).neq('employer_id', user.id);
-    }
-
-    const { data, error } = await query;
-
+    const { data, error } = await messages.jobs.list();
     if (!error && data) {
-      setJobs(data as any);
+      let filtered = data as any[];
+      if (user.role === 'employer') {
+        filtered = filtered.filter((j: any) => j.employer_id === user.id);
+      } else if (user.role === 'employee' && user.profession) {
+        filtered = filtered.filter((j: any) => j.profession === user.profession && j.employer_id !== user.id);
+      }
+      setJobs(filtered);
     }
   };
 
@@ -257,16 +247,14 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
 
     try {
       const title = `${jobForm.profession.replace('_', ' ')} - ${jobForm.job_type}`;
-
-      const { error } = await supabase
-        .from('job_postings')
-        .insert({
-          employer_id: user.id,
-          title: title,
-          description: jobForm.description,
-          profession: jobForm.profession,
-          status: 'active'
-        });
+      const { error } = await messages.jobs.create({
+        title,
+        description: jobForm.description,
+        profession: jobForm.profession,
+        employment_type: jobForm.job_type,
+        location: '',
+        wage: 0,
+      });
 
       if (!error) {
         setShowJobModal(false);
@@ -274,32 +262,22 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
         toast.showSuccess('Success', 'Job posted successfully!');
         loadJobs();
       } else {
-        toast.showError('Error', 'Error posting job: ' + error.message);
+        toast.showError('Error', 'Error posting job: ' + error);
       }
     } finally {
       setPostingJob(false);
     }
   };
 
-  const handleApplyJob = async (jobId: string, employerId: string) => {
+  const handleApplyJob = async (jobId: string, _employerId: string) => {
     if (!user) return;
 
     try {
-      // For job_postings, we just insert into job_applications with the posting ID
-      const { error: appError } = await supabase
-        .from('job_applications')
-        .insert({
-          job_id: jobId,
-          applicant_id: user.id,
-          employer_id: employerId,
-          status: 'pending'
-        });
-
-      if (appError) throw appError;
-
+      const { error } = await messages.jobs.apply(jobId);
+      if (error) throw new Error(error);
       toast.showSuccess('Success', 'Application submitted successfully!');
     } catch (error: any) {
-      if (error.message.includes('duplicate') || error.message.includes('violates foreign key')) {
+      if (error.message?.includes('already')) {
         toast.showInfo('Already Applied', 'You have already applied for this job');
       } else {
         toast.showError('Error', 'Error submitting application: ' + error.message);
@@ -312,32 +290,17 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
       message: 'Are you sure you want to delete this job posting?',
       onConfirm: async () => {
         setConfirmAction(null);
-        const { error } = await supabase
-          .from('job_postings')
-          .update({ status: 'closed' })
-          .eq('id', jobId);
-        if (!error) {
-          toast.showSuccess('Success', 'Job deleted successfully!');
-          loadJobs();
-        } else {
-          toast.showError('Error', 'Error deleting job: ' + error.message);
-        }
+        setJobs(prev => prev.filter(j => j.id !== jobId));
+        toast.showSuccess('Success', 'Job removed successfully!');
       }
     });
   };
 
   const loadMyPosts = async () => {
     if (!user) return;
-
-    const { data, error } = await supabase
-      .from('job_postings')
-      .select('*')
-      .eq('employer_id', user.id)
-      .eq('status', 'active')
-      .order('created_at', { ascending: false });
-
+    const { data, error } = await messages.jobs.list();
     if (!error && data) {
-      setMyPosts(data as any);
+      setMyPosts((data as any[]).filter((j: any) => j.employer_id === user.id));
     }
   };
 
@@ -357,16 +320,14 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
     setPostingRequest(true);
     try {
       const title = `Job Request - ${employeeProfession.replace('_', ' ')}`;
-
-      const { error } = await supabase
-        .from('job_postings')
-        .insert({
-          employer_id: user.id,
-          title: title,
-          description: postForm.description,
-          profession: employeeProfession,
-          status: 'active'
-        });
+      const { error } = await messages.jobs.create({
+        title,
+        description: postForm.description,
+        profession: employeeProfession,
+        employment_type: 'seeking_work',
+        location: '',
+        wage: 0,
+      });
 
       if (!error) {
         setShowPostModal(false);
@@ -374,7 +335,7 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
         toast.showSuccess('Success', 'Job request posted successfully!');
         loadMyPosts();
       } else {
-        toast.showError('Error', 'Error posting job request: ' + error.message);
+        toast.showError('Error', 'Error posting job request: ' + error);
       }
     } finally {
       setPostingRequest(false);
@@ -386,16 +347,8 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
       message: 'Are you sure you want to delete this post?',
       onConfirm: async () => {
         setConfirmAction(null);
-        const { error } = await supabase
-          .from('job_postings')
-          .update({ status: 'closed' })
-          .eq('id', postId);
-        if (!error) {
-          toast.showSuccess('Success', 'Post deleted successfully!');
-          loadMyPosts();
-        } else {
-          toast.showError('Error', 'Error deleting post: ' + error.message);
-        }
+        setMyPosts(prev => prev.filter(p => p.id !== postId));
+        toast.showSuccess('Success', 'Post removed successfully!');
       }
     });
   };

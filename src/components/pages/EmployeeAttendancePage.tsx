@@ -6,7 +6,6 @@ import { employees, profiles, attendance, wages, messages, admin } from '../../l
 import { Header } from '../common/Header';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { supabase } from '../../lib/supabase';
 
 interface AttendanceRecord {
   id?: string;
@@ -52,6 +51,8 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
   const [endMonth, setEndMonth] = useState(new Date().getMonth() + 1);
   const [endYear, setEndYear] = useState(new Date().getFullYear());
   const [generatingStatement, setGeneratingStatement] = useState(false);
+  const [empList, setEmpList] = useState<any[]>([]);
+  const [selectedEmpId, setSelectedEmpId] = useState('');
 
   useSwipeGesture({
     onSwipeLeft: () => { window.location.hash = '#/messages'; }
@@ -59,11 +60,11 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
 
   useEffect(() => {
     fetchAttendance();
-  }, [user, currentDate]);
+  }, [user, currentDate, selectedEmpId]);
 
   useEffect(() => {
-    if (!user) return;
-    return () => {};
+    if (!user || user.role !== 'employer') return;
+    employees.list().then(({ data }) => { if (data) setEmpList(data); });
   }, [user]);
 
   const fetchAttendance = async () => {
@@ -74,29 +75,25 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
     const startDateStr = toDateStr(year, month, 1);
     const endDateStr = toDateStr(year, month, new Date(year, month + 1, 0).getDate());
 
-    const { data, error } = await supabase
-      .from('attendance_records')
-      .select('*')
-      .eq('employee_id', user.id)
-      .gte('attendance_date', startDateStr)
-      .lte('attendance_date', endDateStr)
-      .order('login_time', { ascending: true });
+    const targetId = selectedEmpId || user.id;
+    const { data, error } = await attendance.list({ employee_id: targetId, from: startDateStr, to: endDateStr });
 
     if (error || !data) return;
 
     // Collect unique employer IDs to fetch names
-    const employerIds = [...new Set(data.map((r: any) => r.employer_id).filter(Boolean))];
+    const employerIds = [...new Set(data.map((r: any) => r.employer_id).filter(Boolean))] as string[];
     const nameMap: Record<string, string> = { ...employerNames };
 
     if (employerIds.length > 0) {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, name')
-        .in('id', employerIds);
-      if (profiles) {
-        profiles.forEach((p: any) => { nameMap[p.id] = p.name; });
-        setEmployerNames(nameMap);
-      }
+      await Promise.all(
+        employerIds.map(async (empId: string) => {
+          if (!nameMap[empId]) {
+            const { data: profileData } = await profiles.get(empId);
+            if (profileData) nameMap[empId] = profileData.name;
+          }
+        })
+      );
+      setEmployerNames({ ...nameMap });
     }
 
     // Group all records by date
@@ -169,15 +166,10 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
       const endDate = new Date(endYear, endMonth, 0);
       const endDateStr = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
-      const { data: records, error } = await supabase
-        .from('attendance_records')
-        .select('*')
-        .eq('employee_id', user.id)
-        .gte('attendance_date', startDateStr)
-        .lte('attendance_date', endDateStr)
-        .order('attendance_date', { ascending: true });
+      const targetId = selectedEmpId || user.id;
+      const { data: records, error } = await attendance.list({ employee_id: targetId, from: startDateStr, to: endDateStr });
 
-      if (error) throw error;
+      if (error) throw new Error(error);
       if (!records || records.length === 0) {
         toast.showInfo('No Records', 'No attendance records found for the selected period');
         return;
@@ -204,8 +196,8 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
       const h = Math.floor(totalHours), m = Math.round((totalHours - h) * 60);
       content += `\nSUMMARY\n${'='.repeat(60)}\nPresent: ${presentDays} days\nAbsent: ${absentDays} days\nLeave: ${leaveDays} days\nSick Leave: ${sickDays} days\nTotal Hours: ${h}h ${m}m\n`;
 
-      const { error: stmtErr } = await wages.statements.list(); // replaced: statements inserted via API
-      if (stmtErr) throw stmtErr;
+      const { error: stmtErr } = await wages.statements.create({ user_id: user.id, message: content });
+      if (stmtErr) throw new Error(stmtErr);
 
       toast.showSuccess('Success', 'Attendance statement generated! Check the wages page to view it.');
       setShowStatementModal(false);
@@ -224,6 +216,23 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
       <Header onReferFriend={onReferFriend} onMessages={onMessages} />
 
       <div className="max-w-lg mx-auto p-4 pt-20 pb-8">
+        {/* Employee dropdown for employers */}
+        {user?.role === 'employer' && empList.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">View Attendance For</label>
+            <select
+              value={selectedEmpId}
+              onChange={e => { setSelectedEmpId(e.target.value); setSelectedDate(null); setSelectedDayData(null); }}
+              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="">Select an employee</option>
+              {empList.map((emp: any) => (
+                <option key={emp.id} value={emp.id}>{emp.name || emp.email}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Calendar Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4">
           {/* Month navigation */}

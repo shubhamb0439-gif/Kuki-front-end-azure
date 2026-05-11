@@ -5,7 +5,6 @@ import { useToast } from '../../contexts/ToastContext';
 import { employees, profiles, attendance, wages, messages, admin } from '../../lib/api';
 import { Header } from '../common/Header';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
-import { supabase } from '../../lib/supabase';
 
 interface PerformanceRating {
   id: string;
@@ -28,7 +27,7 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [employeeList, setEmployeeList] = useState<any[]>([]);
   const [performanceData, setPerformanceData] = useState<PerformanceRating[]>([]);
   const [averageRating, setAverageRating] = useState(0);
   const [showEmployerRatingModal, setShowEmployerRatingModal] = useState(false);
@@ -62,46 +61,28 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
 
   const fetchEmployees = async () => {
     if (!user) return;
-
-    const { data, error } = await supabase
-      .from('employees')
-      .select(`
-        id,
-        user_id,
-        email,
-        name,
-        profession,
-        profiles!employees_user_id_fkey(name, profile_photo)
-      `)
-      .eq('employer_id', user.id)
-      .eq('status', 'active');
-
+    const { data, error } = await employees.list();
     if (!error && data) {
-      const formattedEmployees = data.map(emp => ({
-        id: emp.user_id || emp.id, // Use employee record ID for manual employees
-        name: emp.user_id ? (emp.profiles?.name || emp.email) : emp.name || emp.email,
+      const formatted = (data as any[]).map((emp: any) => ({
+        id: emp.id,
+        user_id: emp.user_id,
+        name: emp.name || emp.email,
         email: emp.email,
-        profile_photo: emp.profiles?.profile_photo,
-        isManualEmployee: !emp.user_id, // Flag to identify manual employees
-        employeeRecordId: emp.id, // Keep track of the employee record ID
+        profile_photo: emp.photo_url || emp.profile_photo,
+        isManualEmployee: !emp.user_id,
+        employeeRecordId: emp.id,
       }));
-      setEmployees(formattedEmployees);
+      setEmployeeList(formatted);
     }
   };
 
   const fetchMyPerformance = async () => {
     if (!user) return;
-
-    const { data, error } = await supabase
-      .from('performance_ratings')
-      .select('*')
-      .eq('employee_id', user.id)
-      .order('rating_date', { ascending: false });
-
+    const { data, error } = await admin.ratings.listByEmployee(user.id);
     if (!error && data) {
-      setPerformanceData(data);
+      setPerformanceData(data as any);
       if (data.length > 0) {
-        const avg = data.reduce((sum, r) => sum + r.rating, 0) / data.length;
+        const avg = data.reduce((sum: number, r: any) => sum + r.rating, 0) / data.length;
         setAverageRating(Math.round(avg * 10) / 10);
       }
     }
@@ -109,22 +90,20 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
 
   const fetchEmployers = async () => {
     if (!user) return;
-
-    const { data, error } = await supabase
-      .from('employees')
-      .select(`
-        employer_id,
-        employer:profiles!employees_employer_id_fkey(id, name, profile_photo)
-      `)
-      .eq('user_id', user.id);
-
+    const { data, error } = await employees.list();
     if (!error && data) {
-      const formattedEmployers = data.map(emp => ({
-        id: emp.employer_id,
-        name: emp.employer.name,
-        profile_photo: emp.employer.profile_photo,
-      }));
-      setEmployers(formattedEmployers);
+      const employerIds = [...new Set((data as any[]).map((e: any) => e.employer_id).filter(Boolean))] as string[];
+      const formatted = await Promise.all(
+        employerIds.map(async (empId: string) => {
+          const { data: profileData } = await profiles.get(empId);
+          return {
+            id: empId,
+            name: profileData?.name || 'Employer',
+            profile_photo: profileData?.profile_photo,
+          };
+        })
+      );
+      setEmployers(formatted);
     }
   };
 
@@ -160,37 +139,21 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
     try {
       const ratingDate = selectedDate.toISOString().split('T')[0];
 
-      // For manual employees (no user account), use the employee record ID
-      const employeeIdForRating = selectedEmployee.isManualEmployee
-        ? selectedEmployee.employeeRecordId
-        : selectedEmployee.id;
-
-      const ratingData: any = {
+      const { error: ratingError } = await admin.ratings.upsert({
         employer_id: user?.id,
-        employee_id: employeeIdForRating,
-        employee_record_id: selectedEmployee.employeeRecordId,
+        employee_id: selectedEmployee.id,
         rating_date: ratingDate,
-        rating: rating,
+        rating,
         comment: comment.trim(),
-        updated_at: new Date().toISOString()
-      };
+      });
 
-      const { error: ratingError } = await supabase
-        .from('performance_ratings')
-        .upsert(ratingData);
+      if (ratingError) throw new Error(ratingError);
 
-      if (ratingError) throw ratingError;
-
-      // Only send statement if employee has a user account
-      if (comment.trim() && !selectedEmployee.isManualEmployee) {
-        const { error: messageError } = await supabase
-          .from('statements')
-          .insert({
-            user_id: selectedEmployee.id,
-            message: `PERFORMANCE RATING RECEIVED\n\nFrom: ${user?.name}\nDate: ${ratingDate}\nRating: ${rating} stars\n\nComment:\n${comment}\n\n- Performance Review System`
-          });
-
-        if (messageError) throw messageError;
+      if (comment.trim() && selectedEmployee.user_id) {
+        await wages.statements.create({
+          user_id: selectedEmployee.user_id,
+          message: `PERFORMANCE RATING RECEIVED\n\nFrom: ${user?.name}\nDate: ${ratingDate}\nRating: ${rating} stars\n\nComment:\n${comment}\n\n- Performance Review System`,
+        });
       }
 
       setShowRatingModal(false);
@@ -199,11 +162,9 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
       setComment('');
       setSelectedDate(null);
 
-      const successMessage = selectedEmployee.isManualEmployee
-        ? 'Performance rating saved successfully! (Record keeper entry - no notification sent)'
-        : 'Performance rating saved successfully!';
-
-      toast.showSuccess('Success', successMessage);
+      toast.showSuccess('Success', selectedEmployee.isManualEmployee
+        ? 'Performance rating saved! (No notification sent for manual employee)'
+        : 'Performance rating saved successfully!');
     } catch (error: any) {
       toast.showError('Error', 'Error saving rating: ' + error.message);
     }
@@ -216,29 +177,20 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
     }
 
     try {
-      const { error: ratingError } = await supabase
-        .from('employer_ratings')
-        .upsert({
-          employer_id: selectedEmployer.id,
-          employee_id: user?.id,
-          rating: employerRating,
-          comment: employerComment.trim(),
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'employer_id,employee_id'
-        });
+      const { error: ratingError } = await admin.ratings.upsert({
+        employer_id: selectedEmployer.id,
+        employee_id: user?.id,
+        rating: employerRating,
+        comment: employerComment.trim(),
+      });
 
-      if (ratingError) throw ratingError;
+      if (ratingError) throw new Error(ratingError);
 
       if (employerComment.trim()) {
-        const { error: messageError } = await supabase
-          .from('statements')
-          .insert({
-            user_id: selectedEmployer.id,
-            message: `EMPLOYER RATING RECEIVED\n\nFrom: ${user?.name}\nRating: ${employerRating} stars\n\nComment:\n${employerComment}\n\n- Rating System`
-          });
-
-        if (messageError) throw messageError;
+        await wages.statements.create({
+          user_id: selectedEmployer.id,
+          message: `EMPLOYER RATING RECEIVED\n\nFrom: ${user?.name}\nRating: ${employerRating} stars\n\nComment:\n${employerComment}\n\n- Rating System`,
+        });
       }
 
       setShowEmployerRatingModal(false);
@@ -464,13 +416,13 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
                   <select
                     value={selectedEmployee?.id || ''}
                     onChange={(e) => {
-                      const emp = employees.find(emp => emp.id === e.target.value);
+                      const emp = employeeList.find(emp => emp.id === e.target.value);
                       setSelectedEmployee(emp || null);
                     }}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Choose an employee...</option>
-                    {employees.map((employee) => (
+                    {employeeList.map((employee) => (
                       <option key={employee.id} value={employee.id}>
                         {employee.name}
                       </option>

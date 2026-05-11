@@ -158,6 +158,7 @@ export const qrTransactions = {
   create: (data: Record<string, any>) => request<any>('POST', '/qr-transactions', data),
   get: (qr_code: string) => request<any>('GET', `/qr-transactions?qr_code=${encodeURIComponent(qr_code)}`),
   update: (id: string, updates: Record<string, any>) => request<any>('PATCH', `/qr-transactions/${id}`, updates),
+  process: (data: { qr_code: string }) => request<any>('POST', '/qr-transactions/process', data),
 };
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
