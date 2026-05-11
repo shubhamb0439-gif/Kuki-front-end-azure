@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs sed -i 's|/logo-kuki\\\\.png|/logo-kuki.svg|g')",
+      "Bash(xargs sed -i 's|/logo-kuki\\\\.svg|/logo-kuki.png|g')"
+    ]
+  }
+}
