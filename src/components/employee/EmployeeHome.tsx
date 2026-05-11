@@ -3,8 +3,7 @@ import { CreditCard as Edit, Plus, QrCode } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../../contexts/ToastContext';
-import { employees, profiles, attendance, wages, messages, admin } from '../../lib/api';
-import { supabase } from '../../lib/supabase';
+import { employees, profiles, attendance, wages, messages, admin, qrTransactions } from '../../lib/api';
 import { QRScanner } from '../common/QRScanner';
 import { Header } from '../common/Header';
 import { ProfileWithStatusRing } from '../common/ProfileWithStatusRing';
@@ -171,33 +170,30 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
   const checkLinkedEmployer = async () => {
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from('employees')
-      .select(`
-        id,
-        employer_id,
-        employer:profiles!employees_employer_id_fkey(name, email, profile_photo, job_status, show_status_ring, profession)
-      `)
-      .eq('user_id', user.id);
-
-    if (error) {
+    const { data, error } = await employees.list();
+    if (error || !data) {
       console.error('Error checking linked employer:', error);
       return;
     }
 
-    if (data && data.length > 0) {
-      const employers = data
-        .filter(item => item.employer)
-        .map(item => ({
-          id: item.employer_id,
-          name: item.employer.name,
-          email: item.employer.email,
-          profile_photo: item.employer.profile_photo,
-          job_status: item.employer.job_status,
-          show_status_ring: item.employer.show_status_ring,
-          profession: item.employer.profession
-        }));
-      setLinkedEmployers(employers);
+    if (data.length > 0) {
+      const employerList = await Promise.all(
+        data
+          .filter((emp: any) => emp.employer_id)
+          .map(async (emp: any) => {
+            const { data: profile } = await profiles.get(emp.employer_id);
+            return {
+              id: emp.employer_id,
+              name: profile?.name || 'Employer',
+              email: profile?.email || '',
+              profile_photo: profile?.profile_photo || null,
+              job_status: profile?.job_status || null,
+              show_status_ring: profile?.show_status_ring || false,
+              profession: profile?.profession || ''
+            };
+          })
+      );
+      setLinkedEmployers(employerList.filter((e: any) => e.id));
     }
   };
 
@@ -246,26 +242,19 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
       const attendanceDate = parts.length === 6 ? parts[4] : null;
 
       // Find the employee record for this user
-      const { data: employeeRecord } = await supabase
-        .from('employees')
-        .select('id, user_id')
-        .eq('user_id', user.id)
-        .eq('employer_id', employerId)
-        .maybeSingle();
+      const { data: empList } = await employees.list();
+      const employeeRecord = (empList || []).find(
+        (e: any) => e.employer_id === employerId
+      );
 
       if (!employeeRecord) {
         throw new Error('You are not linked to this employer');
       }
 
       // Find the pending transaction
-      const { data: transaction } = await supabase
-        .from('qr_transactions')
-        .select('*')
-        .eq('qr_code', qrCode)
-        .eq('status', 'pending')
-        .maybeSingle();
+      const { data: transaction } = await qrTransactions.get(qrCode);
 
-      if (!transaction) {
+      if (!transaction || transaction.status !== 'pending') {
         throw new Error('QR code not found or already used');
       }
 
@@ -297,13 +286,10 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
         await handleAttendance(employeeRecord.user_id, employerId, attendanceDate);
 
         // Update transaction
-        await supabase
-          .from('qr_transactions')
-          .update({
-            scanned_at: new Date().toISOString(),
-            status: 'completed'
-          })
-          .eq('id', transaction.id);
+        await qrTransactions.update(transaction.id, {
+          scanned_at: new Date().toISOString(),
+          status: 'completed'
+        });
 
         showSuccess('Attendance Marked', 'Your attendance has been marked successfully!');
         setLoading(false);
@@ -311,15 +297,12 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
       }
 
       // Update transaction for non-attendance types
-      const { error: updateError } = await supabase
-        .from('qr_transactions')
-        .update({
-          scanned_at: new Date().toISOString(),
-          status: 'completed'
-        })
-        .eq('id', transaction.id);
+      const { error: updateError } = await qrTransactions.update(transaction.id, {
+        scanned_at: new Date().toISOString(),
+        status: 'completed'
+      });
 
-      if (updateError) throw updateError;
+      if (updateError) throw new Error(updateError);
 
       // Process based on transaction type
       if (transactionType === 'pay_wages') {
@@ -351,59 +334,39 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
       year: 'numeric'
     });
 
-    const { data: wage, error: wageError } = await supabase
-      .from('employee_wages')
-      .select('*')
-      .eq('employee_id', employeeId)
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { data: wageList, error: wageError } = await wages.list(employeeId);
+    if (wageError) throw new Error(wageError);
 
-    if (wageError) {
-      console.error('Error fetching wage:', wageError);
-      throw wageError;
-    }
+    const wage = (wageList || []).sort((a: any, b: any) =>
+      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+    )[0];
 
     if (wage) {
-      const { error: updateError } = await supabase
-        .from('employee_wages')
-        .update({
-          payment_date: paymentDate,
-          updated_at: paymentDate
-        })
-        .eq('id', wage.id);
+      const { error: updateError } = await wages.update(wage.id, {
+        payment_date: paymentDate,
+        updated_at: paymentDate
+      });
+      if (updateError) throw new Error(updateError);
 
-      if (updateError) {
-        console.error('Error updating payment date:', updateError);
-        throw updateError;
-      }
-
-      const { error: statementError } = await supabase
-        .from('statements')
-        .insert({
-          user_id: user?.id,
-          message: `WAGE PAYMENT CONFIRMATION\n\nPayment Date: ${paymentDateDisplay}\nMonthly Wage: ${wage.currency} ${parseFloat(wage.monthly_wage).toFixed(2)}\nCurrency: ${wage.currency}\nStatus: Paid\n\nYour wages have been paid successfully.\n\n- Statement Personnel`
-        });
-
-      if (statementError) {
-        console.error('Error creating statement:', statementError);
-        throw statementError;
-      }
+      const { error: statementError } = await wages.statements.create({
+        user_id: user?.id,
+        message: `WAGE PAYMENT CONFIRMATION\n\nPayment Date: ${paymentDateDisplay}\nMonthly Wage: ${wage.currency} ${parseFloat(wage.monthly_wage).toFixed(2)}\nCurrency: ${wage.currency}\nStatus: Paid\n\nYour wages have been paid successfully.\n\n- Statement Personnel`
+      });
+      if (statementError) throw new Error(statementError);
     } else {
       throw new Error('No wage record found for this employee');
     }
   };
 
   const handleLoanSettlement = async (employeeId: string, employerId: string) => {
-    // Mark loans as settled
-    await supabase
-      .from('employee_loans')
-      .update({
+    const { data: loanList } = await wages.loans.list(employeeId);
+    const activeLoans = (loanList || []).filter((l: any) => l.status === 'active');
+    for (const loan of activeLoans) {
+      await wages.loans.update(loan.id, {
         status: 'closed',
         foreclosure_date: new Date().toISOString()
-      })
-      .eq('employee_id', employeeId)
-      .eq('status', 'active');
+      });
+    }
   };
 
   const handleLoanForeclosure = async (employeeId: string, employerId: string, metadata: any) => {
@@ -422,35 +385,24 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
     let totalAmount = 0;
     let currency = 'USD';
 
+    const { data: loanList } = await wages.loans.list(employeeId);
     for (const loanId of loanIds) {
-      const { data: loan } = await supabase
-        .from('employee_loans')
-        .select('*')
-        .eq('id', loanId)
-        .maybeSingle();
-
+      const loan = (loanList || []).find((l: any) => l.id === loanId);
       if (loan) {
         totalAmount += loan.remaining_amount || loan.total_amount;
         currency = loan.currency || 'USD';
-
-        await supabase
-          .from('employee_loans')
-          .update({
-            status: 'paid',
-            foreclosure_date: foreclosureDate,
-            remaining_amount: 0
-          })
-          .eq('id', loanId)
-          .eq('employee_id', employeeId);
+        await wages.loans.update(loanId, {
+          status: 'paid',
+          foreclosure_date: foreclosureDate,
+          remaining_amount: 0
+        });
       }
     }
 
-    await supabase
-      .from('statements')
-      .insert({
-        user_id: user?.id,
-        message: `LOAN FORECLOSURE CONFIRMATION\n\nForeclosure Date: ${foreclosureDateDisplay}\nTotal Amount Settled: ${currency} ${totalAmount.toFixed(2)}\nNumber of Loans Closed: ${loanIds.length}\nStatus: Paid in Full\n\nAll selected loans have been successfully foreclosed and paid.\n\nThank you for your prompt settlement!\n\n- Statement Personnel`
-      });
+    await wages.statements.create({
+      user_id: user?.id,
+      message: `LOAN FORECLOSURE CONFIRMATION\n\nForeclosure Date: ${foreclosureDateDisplay}\nTotal Amount Settled: ${currency} ${totalAmount.toFixed(2)}\nNumber of Loans Closed: ${loanIds.length}\nStatus: Paid in Full\n\nAll selected loans have been successfully foreclosed and paid.\n\nThank you for your prompt settlement!\n\n- Statement Personnel`
+    });
   };
 
   const handleLoanGrant = async (employeeId: string, employerId: string, metadata: any) => {
@@ -466,34 +418,27 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
     const tenureMonths = Math.ceil(total_amount / monthly_deduction);
 
     // Create the loan record
-    const { error: loanError } = await supabase
-      .from('employee_loans')
-      .insert({
-        employee_id: employeeId,
-        employer_id: employerId,
-        amount,
-        interest_rate,
-        total_amount,
-        remaining_amount: total_amount,
-        paid_amount: 0,
-        status: 'active',
-        currency,
-        loan_date: loanDate,
-        monthly_deduction,
-        tenure_months: tenureMonths
-      });
+    const { error: loanError } = await wages.loans.create({
+      employee_id: employeeId,
+      employer_id: employerId,
+      amount,
+      interest_rate,
+      total_amount,
+      remaining_amount: total_amount,
+      paid_amount: 0,
+      status: 'active',
+      currency,
+      loan_date: loanDate,
+      monthly_deduction,
+      tenure_months: tenureMonths
+    });
 
-    if (loanError) {
-      console.error('Error creating loan:', loanError);
-      throw new Error('Failed to create loan: ' + loanError.message);
-    }
+    if (loanError) throw new Error('Failed to create loan: ' + loanError);
 
     // Create the statement
-    const { error: statementError } = await supabase
-      .from('statements')
-      .insert({
-        user_id: employee_user_id,
-        message: `LOAN AGREEMENT
+    const { error: statementError } = await wages.statements.create({
+      user_id: employee_user_id,
+      message: `LOAN AGREEMENT
 
 Date: ${loanDateDisplay}
 Employee: ${employee_name}
@@ -509,10 +454,7 @@ Please ensure timely repayment as per agreement.
 - Statement Personnel`
       });
 
-    if (statementError) {
-      console.error('Error creating statement:', statementError);
-      throw new Error('Failed to create statement: ' + statementError.message);
-    }
+    if (statementError) throw new Error('Failed to create statement: ' + statementError);
   };
 
   const handleContractWagePayment = async (employeeId: string, employerId: string, metadata: any) => {
@@ -525,28 +467,10 @@ Please ensure timely repayment as per agreement.
 
     const { amount, currency, employee_user_id } = metadata;
 
-    // Insert contract payment record
-    const { error: paymentError } = await supabase
-      .from('contract_payments')
-      .insert({
-        employee_id: employeeId,
-        employer_id: employerId,
-        amount,
-        currency,
-        payment_date: paymentDate
-      });
-
-    if (paymentError) {
-      console.error('Error creating contract payment:', paymentError);
-      throw new Error('Failed to record payment: ' + paymentError.message);
-    }
-
     // Create statement for employee
-    const { error: statementError } = await supabase
-      .from('statements')
-      .insert({
-        user_id: employee_user_id,
-        message: `CONTRACT WAGE PAYMENT
+    const { error: statementError } = await wages.statements.create({
+      user_id: employee_user_id,
+      message: `CONTRACT WAGE PAYMENT
 
 Payment Date: ${paymentDateDisplay}
 Amount Paid: ${currency} ${amount.toFixed(2)}
@@ -557,10 +481,7 @@ Your contract wage has been paid successfully.
 - Statement Personnel`
       });
 
-    if (statementError) {
-      console.error('Error creating statement:', statementError);
-      throw new Error('Failed to create statement: ' + statementError.message);
-    }
+    if (statementError) throw new Error('Failed to create statement: ' + statementError);
   };
 
   const handleAttendance = async (employeeId: string, employerId: string, specificDate?: string | null) => {
@@ -570,66 +491,47 @@ Your contract wage has been paid successfully.
     const scannedAt = new Date().toISOString();
     const isPastDate = attendanceDate !== today;
 
-    const { data: existingRecord } = await supabase
-      .from('attendance_records')
-      .select('id, login_time, logout_time')
-      .eq('employee_id', employeeId)
-      .eq('employer_id', employerId)
-      .eq('attendance_date', attendanceDate)
-      .maybeSingle();
+    const { data: attList } = await attendance.list({ employee_id: employeeId, from: attendanceDate, to: attendanceDate });
+    const existingRecord = (attList || []).find(
+      (r: any) => r.attendance_date === attendanceDate && r.employer_id === employerId
+    );
 
     if (existingRecord?.login_time && existingRecord?.logout_time) {
       throw new Error('Attendance already completed for this date');
     }
 
     if (isPastDate) {
-      // Past-date reimbursement: always set a full 8-hour default shift
       const pastRecord = {
-        status: 'present' as const,
-        scanned_at: scannedAt,
-        updated_at: scannedAt,
-        login_time: `${attendanceDate}T09:00:00`,
-        logout_time: `${attendanceDate}T17:00:00`,
-        total_hours: 8
-      };
-
-      let err;
-      if (existingRecord) {
-        // Force-update the stuck record
-        ({ error: err } = await supabase
-          .from('attendance_records')
-          .update(pastRecord)
-          .eq('id', existingRecord.id));
-      } else {
-        ({ error: err } = await supabase
-          .from('attendance_records')
-          .insert({
-            employee_id: employeeId,
-            employer_id: employerId,
-            attendance_date: attendanceDate,
-            ...pastRecord
-          }));
-      }
-
-      if (err) throw err;
-      return;
-    }
-
-    // Today: normal login/logout toggle
-    const { error } = await supabase
-      .from('attendance_records')
-      .upsert({
         employee_id: employeeId,
         employer_id: employerId,
         attendance_date: attendanceDate,
         status: 'present',
         scanned_at: scannedAt,
-        updated_at: scannedAt
-      }, {
-        onConflict: 'employer_id,employee_id,attendance_date'
-      });
+        login_time: `${attendanceDate}T09:00:00`,
+        logout_time: `${attendanceDate}T17:00:00`,
+        total_hours: 8
+      };
 
-    if (error) throw error;
+      if (existingRecord) {
+        const { error: err } = await attendance.clockOut(existingRecord.id);
+        if (err) throw new Error(err);
+      } else {
+        const { error: err } = await attendance.manualEntry(pastRecord);
+        if (err) throw new Error(err);
+      }
+      return;
+    }
+
+    // Today: clock in
+    const { error } = await attendance.clockIn({
+      employee_id: employeeId,
+      employer_id: employerId,
+      attendance_date: attendanceDate,
+      status: 'present',
+      scanned_at: scannedAt
+    });
+
+    if (error) throw new Error(error);
   };
 
   const linkToEmployer = async (qrData?: string) => {
@@ -656,12 +558,9 @@ Your contract wage has been paid successfully.
         }
       }
 
-      const { data: existing } = await supabase
-        .from('employees')
-        .select('employer_id')
-        .eq('user_id', user.id)
-        .eq('employer_id', employerId)
-        .maybeSingle();
+      // Check if already linked using the proper API
+      const { data: empList } = await employees.list();
+      const existing = (empList || []).find((e: any) => e.employer_id === employerId);
 
       if (existing) {
         throw new Error('You are already linked to this employer');
@@ -674,23 +573,16 @@ Your contract wage has been paid successfully.
         employment_type: employmentType
       };
 
-      if (user.email) {
-        insertData.email = user.email;
-      }
-      if (user.phone) {
-        insertData.phone = user.phone;
-      }
+      if (user.email) insertData.email = user.email;
+      if (user.phone) insertData.phone = user.phone;
 
       if (partTimeConfig) {
         insertData.working_hours_per_day = partTimeConfig.workingHoursPerDay;
         insertData.working_days_per_month = partTimeConfig.workingDaysPerMonth;
       }
 
-      const { error } = await supabase
-        .from('employees')
-        .insert(insertData);
-
-      if (error) throw error;
+      const { error } = await employees.add(insertData);
+      if (error) throw new Error(error);
 
       await checkLinkedEmployer();
       setManualCode('');
