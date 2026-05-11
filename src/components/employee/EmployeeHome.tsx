@@ -558,31 +558,22 @@ Your contract wage has been paid successfully.
         }
       }
 
-      // Check if already linked using the proper API
-      const { data: empList } = await employees.list();
-      const existing = (empList || []).find((e: any) => e.employer_id === employerId);
-
-      if (existing) {
-        throw new Error('You are already linked to this employer');
-      }
-
-      const insertData: any = {
-        user_id: user.id,
+      // Link employee to employer via dedicated endpoint (employee JWT, no user_id in body)
+      const linkData: any = {
         employer_id: employerId,
-        status: 'active',
-        employment_type: employmentType
+        employment_type: employmentType,
+        wage_amount: 0,
+        wage_type: 'monthly',
       };
 
-      if (user.email) insertData.email = user.email;
-      if (user.phone) insertData.phone = user.phone;
-
       if (partTimeConfig) {
-        insertData.working_hours_per_day = partTimeConfig.workingHoursPerDay;
-        insertData.working_days_per_month = partTimeConfig.workingDaysPerMonth;
+        linkData.working_hours_per_day = partTimeConfig.workingHoursPerDay;
+        linkData.working_days_per_month = partTimeConfig.workingDaysPerMonth;
       }
 
-      const { error } = await employees.add(insertData);
+      const { data: linkResult, error } = await employees.link(linkData);
       if (error) throw new Error(error);
+      // 200 (already_linked / reactivated) and 201 (newly linked) are both success
 
       await checkLinkedEmployer();
       setManualCode('');

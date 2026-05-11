@@ -88,6 +88,7 @@ export const profiles = {
 export const employees = {
   list: () => request<any[]>('GET', '/employees'),
   add: (data: Record<string, any>) => request<any>('POST', '/employees', data),
+  link: (data: Record<string, any>) => request<any>('POST', '/employees/link', data),
   update: (id: string, updates: Record<string, any>) => request<any>('PATCH', `/employees/${id}`, updates),
   remove: (id: string) => request<any>('DELETE', `/employees/${id}`),
 };
