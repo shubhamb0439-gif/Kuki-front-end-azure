@@ -59,8 +59,10 @@ export function PlanChangeRequestsSection() {
     setProcessingId(request.id);
 
     try {
+      const planLimits: Record<string, number> = { free: 1, core: 3, pro: 6, pro_plus: 12 };
       const { error: profileError } = await profiles.update(request.user_id, {
-        subscription_plan: request.requested_plan
+        subscription_plan: request.requested_plan,
+        max_employees: planLimits[request.requested_plan] ?? 1
       });
       if (profileError) throw new Error(profileError);
 

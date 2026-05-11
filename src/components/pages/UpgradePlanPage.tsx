@@ -68,10 +68,12 @@ export function UpgradePlanPage({ selectedPlan, trialUsed = false, onClose }: Up
     setIsProcessing(true);
 
     try {
+      const planLimits: Record<string, number> = { free: 1, core: 3, pro: 6, pro_plus: 12 };
       const { data, error } = await profiles.update(user.id, {
         subscription_plan: selectedPlan,
         trial_started_at: new Date().toISOString(),
-        trial_used: true
+        trial_used: true,
+        max_employees: planLimits[selectedPlan] ?? 1
       });
 
       if (error) throw new Error(error);

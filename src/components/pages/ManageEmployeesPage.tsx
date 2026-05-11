@@ -3,11 +3,10 @@ import { Users, Trash2, DollarSign, Gift, X, CreditCard, XCircle, Plus, Minus, T
 import QRCode from 'react-qr-code';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { employees, profiles, attendance, wages, messages, admin } from '../../lib/api';
+import { employees as employeesApi, profiles, wages, qrTransactions } from '../../lib/api';
 import { Header } from '../common/Header';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { ConfirmModal } from '../common/ConfirmModal';
-import { supabase } from '../../lib/supabase';
 
 interface Employee {
   id: string;
@@ -73,6 +72,7 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
   const [loading, setLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null);
   const [hasExistingWage, setHasExistingWage] = useState(false);
+  const [existingWageId, setExistingWageId] = useState<string | null>(null);
   const [wageInfo, setWageInfo] = useState<{
     hourlyRate: number;
     actualHoursWorked: number;
@@ -115,26 +115,20 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
   const fetchEmployees = async () => {
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from('employees')
-      .select(`
-        *,
-        profiles!employees_user_id_fkey(name, profile_photo)
-      `)
-      .eq('employer_id', user.id);
+    const { data, error } = await employeesApi.list();
 
-    if (error) {
+    if (error || !data) {
       console.error('Error fetching employees:', error);
       return;
     }
 
-    const formattedEmployees = data.map(emp => ({
+    const formattedEmployees = data.map((emp: any) => ({
       id: emp.id,
       user_id: emp.user_id,
-      name: emp.profiles?.name || emp.email || emp.phone,
+      name: emp.name || emp.email || emp.phone || 'Unknown',
       email: emp.email,
       phone: emp.phone,
-      profile_photo: emp.profiles?.profile_photo,
+      profile_photo: emp.photo_url || emp.profile_photo,
       status: emp.status,
       created_at: emp.created_at,
       employment_type: emp.employment_type || 'full_time',
@@ -152,36 +146,30 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
   };
 
   const fetchEmployeeData = async () => {
-    if (!selectedEmployee) return;
+    if (!selectedEmployee || !user) return;
 
+    // Currency from profile if linked employee
     let employeeCurrency = 'USD';
-    if (selectedEmployee.user_id) {
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('currency')
-        .eq('id', selectedEmployee.user_id)
-        .maybeSingle();
-
-      if (profileData) {
-        employeeCurrency = profileData.currency || 'USD';
-      }
+    const isLinked = Boolean(
+      selectedEmployee.user_id &&
+      String(selectedEmployee.user_id).trim() !== '' &&
+      String(selectedEmployee.user_id).trim() !== 'null' &&
+      String(selectedEmployee.user_id).trim() !== 'undefined'
+    );
+    if (isLinked) {
+      const { data: profileData } = await profiles.get(selectedEmployee.user_id);
+      if (profileData?.currency) employeeCurrency = profileData.currency;
     }
-
     setCurrency(employeeCurrency);
     setCurrentCurrency(employeeCurrency);
 
-    const { data: wageData } = await supabase
-      .from('employee_wages')
-      .select('monthly_wage, hourly_rate, actual_hours_worked, final_payable, deductions')
-      .eq('employee_id', selectedEmployee.id)
-      .eq('employer_id', user?.id)
-      .maybeSingle();
-
+    // Wages
+    const { data: wageList } = await wages.list(selectedEmployee.id);
+    const wageData = (wageList || []).find((w: any) => w.employer_id === user.id);
     if (wageData) {
-      setWageAmount(wageData.monthly_wage.toString());
+      setWageAmount(wageData.monthly_wage?.toString() || '');
       setHasExistingWage(true);
-
-      // Store additional wage info in state
+      setExistingWageId(wageData.id);
       setWageInfo({
         hourlyRate: wageData.hourly_rate || 0,
         actualHoursWorked: wageData.actual_hours_worked || 0,
@@ -191,47 +179,33 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
     } else {
       setWageAmount('');
       setHasExistingWage(false);
+      setExistingWageId(null);
       setWageInfo(null);
     }
 
-    const { data: loansData } = await supabase
-      .from('employee_loans')
-      .select('*')
-      .eq('employee_id', selectedEmployee.id)
-      .eq('status', 'active');
+    // Loans
+    const { data: loansData } = await wages.loans.list(selectedEmployee.id);
+    const activeLoans = (loansData || []).filter((l: any) => l.status === 'active');
+    setEmployeeLoans(activeLoans);
+    const total = activeLoans.reduce((sum: number, loan: any) => sum + (loan.remaining_amount || loan.total_amount), 0);
+    setTotalLoanBalance(total);
+    const monthlyDeduction = activeLoans.reduce((sum: number, loan: any) => sum + (loan.monthly_deduction || 0), 0);
+    setMonthlyLoanDeduction(monthlyDeduction);
 
-    if (loansData) {
-      setEmployeeLoans(loansData);
-      const total = loansData.reduce((sum, loan) => sum + (loan.remaining_amount || loan.total_amount), 0);
-      setTotalLoanBalance(total);
-      const monthlyDeduction = loansData.reduce((sum, loan) => sum + (loan.monthly_deduction || 0), 0);
-      setMonthlyLoanDeduction(monthlyDeduction);
-    } else {
-      setEmployeeLoans([]);
-      setTotalLoanBalance(0);
-      setMonthlyLoanDeduction(0);
-    }
-
+    // Adjustments for current month
     const currentMonth = new Date().toISOString().slice(0, 7);
-    const { data: adjustmentsData } = await supabase
-      .from('employee_bonuses')
-      .select('amount, category')
-      .eq('employee_id', selectedEmployee.id)
-      .eq('employer_id', user?.id)
-      .gte('bonus_date', `${currentMonth}-01`)
-      .lt('bonus_date', `${currentMonth}-32`);
-
-    if (adjustmentsData) {
-      const adj: Adjustment = {
-        merits: adjustmentsData.filter(a => a.category === 'merit').reduce((sum, a) => sum + a.amount, 0),
-        demerits: adjustmentsData.filter(a => a.category === 'demerit').reduce((sum, a) => sum + a.amount, 0),
-        advances: adjustmentsData.filter(a => a.category === 'advance').reduce((sum, a) => sum + a.amount, 0),
-        loanDeductions: adjustmentsData.filter(a => a.category === 'loan_deduction').reduce((sum, a) => sum + a.amount, 0)
-      };
-      setAdjustments(adj);
-    } else {
-      setAdjustments({ merits: 0, demerits: 0, advances: 0, loanDeductions: 0 });
-    }
+    const { data: bonusData } = await wages.bonuses.list(selectedEmployee.id);
+    const monthBonuses = (bonusData || []).filter((b: any) =>
+      b.employer_id === user.id &&
+      b.bonus_date && b.bonus_date.substring(0, 7) === currentMonth
+    );
+    const adj: Adjustment = {
+      merits: monthBonuses.filter((a: any) => a.category === 'merit').reduce((sum: number, a: any) => sum + a.amount, 0),
+      demerits: monthBonuses.filter((a: any) => a.category === 'demerit').reduce((sum: number, a: any) => sum + a.amount, 0),
+      advances: monthBonuses.filter((a: any) => a.category === 'advance').reduce((sum: number, a: any) => sum + a.amount, 0),
+      loanDeductions: monthBonuses.filter((a: any) => a.category === 'loan_deduction').reduce((sum: number, a: any) => sum + a.amount, 0)
+    };
+    setAdjustments(adj);
   };
 
   const subscribeToEmployees = () => {
@@ -275,23 +249,17 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
         const timestamp = Date.now();
         const qrCode = `qr:pay_contract_wages:${user?.id}:${selectedEmployee.id}:${timestamp}`;
 
-        const { error: qrError } = await supabase
-          .from('qr_transactions')
-          .insert({
-            qr_code: qrCode,
-            transaction_type: 'pay_contract_wages',
-            employee_id: selectedEmployee.id,
-            employer_id: user?.id,
-            status: 'pending',
-            metadata: {
-              amount: paymentAmount,
-              currency: currency,
-              employee_name: selectedEmployee.name,
-              employee_user_id: selectedEmployee.user_id
-            }
-          });
+        const { error: qrError } = await qrTransactions.create({
+          qr_code: qrCode,
+          transaction_type: 'pay_contract_wages',
+          employee_id: selectedEmployee.id,
+          employer_id: user?.id,
+          amount: paymentAmount,
+          currency: currency,
+          status: 'pending'
+        });
 
-        if (qrError) throw qrError;
+        if (qrError) throw new Error(qrError);
 
         setQrCodeValue(qrCode);
         setShowQRCode(true);
@@ -316,48 +284,27 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
         calculatedHourlyRate: hourlyRate
       });
 
-      const { error } = await supabase
-        .from('employee_wages')
-        .upsert({
-          employee_id: selectedEmployee.id,
-          employer_id: user?.id,
-          monthly_wage: monthlyWage,
-          currency: currency,
-          hourly_rate: hourlyRate,
-          working_hours_per_day: workingHoursPerDay,
-          total_working_days: workingDaysPerMonth,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'employee_id,employer_id'
-        });
+      const wagePayload = {
+        employee_id: selectedEmployee.id,
+        employer_id: user?.id,
+        monthly_wage: monthlyWage,
+        currency: currency,
+        hourly_rate: hourlyRate,
+        working_hours_per_day: workingHoursPerDay,
+        total_working_days: workingDaysPerMonth,
+        updated_at: new Date().toISOString()
+      };
 
-      if (error) throw error;
-
-      if (selectedEmployee.employment_type === 'part_time' && selectedEmployee.working_hours_per_day && selectedEmployee.working_days_per_month) {
-        console.log('Calculating hourly rate:', {
-          monthlyWage,
-          workingHoursPerDay: selectedEmployee.working_hours_per_day,
-          workingDaysPerMonth: selectedEmployee.working_days_per_month,
-          hourlyRate
-        });
-        const { error: updateError } = await supabase
-          .from('employees')
-          .update({ hourly_rate: hourlyRate })
-          .eq('id', selectedEmployee.id);
-
-        if (updateError) {
-          console.error('Error updating employee hourly rate:', updateError);
-        }
+      if (existingWageId) {
+        const { error } = await wages.update(existingWageId, wagePayload);
+        if (error) throw new Error(error);
       } else {
-        console.log('Skipping hourly rate calculation:', {
-          employment_type: selectedEmployee.employment_type,
-          working_hours_per_day: selectedEmployee.working_hours_per_day,
-          working_days_per_month: selectedEmployee.working_days_per_month
-        });
+        const { error } = await wages.create(wagePayload);
+        if (error) throw new Error(error);
       }
 
       if (selectedEmployee.employment_type === 'part_time' && hourlyRate > 0) {
-        await employees.update(selectedEmployee.id, { hourly_rate: hourlyRate });
+        await employeesApi.update(selectedEmployee.id, { hourly_rate: hourlyRate });
       }
 
       toast.showSuccess('Success', hasExistingWage ? 'Wage updated successfully!' : 'Wage set successfully!');
@@ -386,21 +333,20 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
       const totalAmount = amount + (amount * rate / 100);
       const monthlyDeduction = totalAmount / tenure;
 
-      await supabase
-        .from('employee_loans')
-        .insert({
-          employee_id: selectedEmployee.id,
-          employer_id: user?.id,
-          amount,
-          interest_rate: rate,
-          total_amount: totalAmount,
-          remaining_amount: totalAmount,
-          paid_amount: 0,
-          status: 'active',
-          currency: currentCurrency,
-          tenure_months: tenure,
-          monthly_deduction: monthlyDeduction
-        });
+      const { error: loanError } = await wages.loans.create({
+        employee_id: selectedEmployee.id,
+        employer_id: user?.id,
+        amount,
+        interest_rate: rate,
+        total_amount: totalAmount,
+        remaining_amount: totalAmount,
+        paid_amount: 0,
+        status: 'active',
+        currency: currentCurrency,
+        tenure_months: tenure,
+        monthly_deduction: monthlyDeduction
+      });
+      if (loanError) throw new Error(loanError);
 
       toast.showSuccess('Success', 'Loan granted successfully!');
       closeModal();
@@ -420,16 +366,15 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
 
     setLoading(true);
     try {
-      await supabase
-        .from('employee_bonuses')
-        .insert({
-          employee_id: selectedEmployee.id,
-          employer_id: user?.id,
-          amount: parseFloat(adjustmentAmount),
-          currency: currentCurrency,
-          category: category,
-          reason: adjustmentReason || undefined
-        });
+      const { error: bonusError } = await wages.bonuses.create({
+        employee_id: selectedEmployee.id,
+        employer_id: user?.id,
+        amount: parseFloat(adjustmentAmount),
+        currency: currentCurrency,
+        category: category,
+        reason: adjustmentReason || undefined
+      });
+      if (bonusError) throw new Error(bonusError);
 
       toast.showSuccess('Success', `${category.replace('_', ' ')} added successfully!`);
       closeModal();
@@ -446,18 +391,22 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
 
     setLoading(true);
     try {
-      await supabase
-        .from('employee_loans')
-        .update({ status: 'paid' })
-        .eq('employee_id', selectedEmployee.id)
-        .eq('status', 'active');
+      for (const loan of employeeLoans) {
+        await wages.loans.update(loan.id, { status: 'paid' });
+      }
 
-      await supabase
-        .from('statements')
-        .insert({
+      const isLinkedEmployee = Boolean(
+        selectedEmployee.user_id &&
+        String(selectedEmployee.user_id).trim() !== '' &&
+        String(selectedEmployee.user_id).trim() !== 'null' &&
+        String(selectedEmployee.user_id).trim() !== 'undefined'
+      );
+      if (isLinkedEmployee) {
+        await wages.statements.create({
           user_id: selectedEmployee.user_id,
           message: `LOAN SETTLEMENT CONFIRMATION\n\nDate: ${new Date().toLocaleDateString()}\nEmployee: ${selectedEmployee.name}\nTotal Amount Settled: ${currentCurrency} ${totalLoanBalance.toFixed(2)}\n\nAll loans have been successfully closed and paid in full.\n\nThank you for your prompt payment!\n- Statement Personnel`
         });
+      }
 
       toast.showSuccess('Success', 'Loan settled successfully!');
       closeModal();
@@ -477,10 +426,8 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
         setConfirmAction(null);
         setLoading(true);
         try {
-          await supabase
-            .from('employees')
-            .delete()
-            .eq('id', selectedEmployee.id);
+          const { error: removeError } = await employeesApi.remove(selectedEmployee.id);
+          if (removeError) throw new Error(removeError);
           toast.showSuccess('Success', 'Employee removed successfully!');
           setSelectedEmployee(null);
           closeModal();
@@ -1164,15 +1111,14 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
                       onClick={async () => {
                         if (!user || !selectedEmployee) return;
                         const qrCode = `qr:foreclose_loan:${user.id}:${selectedEmployee.id}:${Date.now()}`;
-                        const { error } = await supabase
-                          .from('qr_transactions')
-                          .insert({
-                            employer_id: user.id,
-                            employee_id: selectedEmployee.id,
-                            transaction_type: 'foreclose_loan',
-                            qr_code: qrCode,
-                            status: 'pending'
-                          });
+                        const { error } = await qrTransactions.create({
+                          employer_id: user.id,
+                          employee_id: selectedEmployee.id,
+                          transaction_type: 'foreclose_loan',
+                          qr_code: qrCode,
+                          amount: totalLoanBalance,
+                          status: 'pending'
+                        });
                         if (!error) {
                           setQrCodeValue(qrCode);
                           setShowQRCode(true);

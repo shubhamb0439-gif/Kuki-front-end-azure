@@ -106,11 +106,13 @@ export function SubscriptionManagementPage() {
       const expiryDate = new Date();
       expiryDate.setFullYear(expiryDate.getFullYear() + 1);
 
+      const planLimits: Record<string, number> = { free: 1, core: 3, pro: 6, pro_plus: 12 };
       const { error: updateError } = await profiles.update(selectedUser.id, {
         account_tier: upgradeData.targetTier,
         subscription_plan: upgradeData.targetPlan,
         subscription_status: 'active',
-        subscription_expires_at: expiryDate.toISOString()
+        subscription_expires_at: expiryDate.toISOString(),
+        max_employees: planLimits[upgradeData.targetPlan] ?? 1
       });
 
       if (updateError) throw new Error(updateError);
