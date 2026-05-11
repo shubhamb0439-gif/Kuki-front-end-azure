@@ -3,8 +3,7 @@ import { CreditCard as Edit, CreditCard, Plus, QrCode, Users, DollarSign, CheckC
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
-import { employees as employeesApi, profiles, attendance, wages, messages, admin } from '../../lib/api';
-import { supabase } from '../../lib/supabase';
+import { employees as employeesApi, profiles, attendance, wages, messages, admin, qrTransactions } from '../../lib/api';
 import { Employee } from '../../types/auth';
 import { Header } from '../common/Header';
 import { ProfileWithStatusRing } from '../common/ProfileWithStatusRing';
@@ -18,7 +17,6 @@ import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { EmployerHomeSkeletonLoader } from '../common/SkeletonLoader';
 import { SubscriptionModal } from '../common/SubscriptionModal';
 import { canAddMoreEmployees, getPlanDisplayName, getTierDisplayName, getPlanBadgeColor, canUseContractEmployment } from '../../lib/subscriptionHelper';
-import { getLinkedAccountIds } from '../../lib/accountLinkHelper';
 import { Modal } from '../common/Modal';
 
 interface EmployerHomeProps {
@@ -122,22 +120,9 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
 
   const fetchUnreadMessages = async () => {
     if (!user) return;
-
-    const linkedAccountIds = await getLinkedAccountIds(user.id);
-
-    const { count: appCount } = await supabase
-      .from('job_applications')
-      .select('id', { count: 'exact', head: true })
-      .in('employer_id', linkedAccountIds)
-      .eq('status', 'pending');
-
-    const { count: stmtCount } = await supabase
-      .from('statements')
-      .select('id', { count: 'exact', head: true })
-      .in('user_id', linkedAccountIds)
-      .eq('read', false);
-
-    setUnreadMessages((appCount || 0) + (stmtCount || 0));
+    const { data } = await messages.list();
+    const unread = (data || []).filter((m: any) => !m.is_read);
+    setUnreadMessages(unread.length);
   };
 
   const loadAdsStatus = async () => {
@@ -207,15 +192,10 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
     const status = await getEmployerOwnStatus(user.id);
     setEmployerStatus(status);
 
-    const { data: ratings } = await supabase
-      .from('employer_ratings')
-      .select('rating')
-      .eq('employer_id', user.id);
-
+    const { data: ratings } = await admin.ratings.listByEmployer(user.id);
     if (ratings && ratings.length > 0) {
-      const avgRating = ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length;
-      const roundedRating = Math.round(avgRating);
-      setEmployerRating(roundedRating);
+      const avgRating = ratings.reduce((sum: number, r: any) => sum + r.rating, 0) / ratings.length;
+      setEmployerRating(Math.round(avgRating));
     } else {
       setEmployerRating(5);
     }
@@ -335,19 +315,16 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
   const createUniversalAttendanceQR = async () => {
     if (!user) return;
 
-    const qrCode = `qr:mark_attendance:${user.id}:universal:${Date.now()}`;
+    const qrCode = crypto.randomUUID();
 
-    const { data, error } = await supabase
-      .from('qr_transactions')
-      .insert({
-        employer_id: user.id,
-        employee_id: null,
-        transaction_type: 'mark_attendance',
-        qr_code: qrCode,
-        status: 'pending'
-      })
-      .select()
-      .single();
+    const { data, error } = await qrTransactions.create({
+      employee_id: null,
+      transaction_type: 'attendance',
+      amount: 0,
+      status: 'pending',
+      qr_code: qrCode,
+      metadata: { employer_id: user.id, type: 'universal_attendance' }
+    });
 
     if (!error && data) {
       setCurrentTransactionId(data.id);
@@ -355,26 +332,23 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
       setQrCodeValue(qrCode);
       setShowQRCode(true);
     } else {
-      showError('QR Code Error', error.message);
+      showError('QR Code Error', error || 'Failed to create QR code');
     }
   };
 
   const createQRTransaction = async (type: 'pay_wages', employeeId: string) => {
     if (!user) return;
 
-    const qrCode = `qr:${type}:${user.id}:${employeeId}:${Date.now()}`;
+    const qrCode = crypto.randomUUID();
 
-    const { data, error } = await supabase
-      .from('qr_transactions')
-      .insert({
-        employer_id: user.id,
-        employee_id: employeeId,
-        transaction_type: type,
-        qr_code: qrCode,
-        status: 'pending'
-      })
-      .select()
-      .single();
+    const { data, error } = await qrTransactions.create({
+      employee_id: employeeId,
+      transaction_type: 'wage_payment',
+      amount: 0,
+      status: 'pending',
+      qr_code: qrCode,
+      metadata: { employer_id: user.id }
+    });
 
     if (!error && data) {
       setCurrentTransactionId(data.id);
@@ -382,7 +356,7 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
       setQrCodeValue(qrCode);
       setShowQRCode(true);
     } else {
-      showError('QR Code Error', error.message);
+      showError('QR Code Error', error || 'Failed to create QR code');
     }
   };
 

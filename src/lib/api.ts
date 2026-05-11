@@ -20,7 +20,7 @@ async function request<T>(
   path: string,
   body?: unknown,
   isFormData = false
-): Promise<{ data: T | null; error: string | null }> {
+): Promise<{ data: T | null; error: string | null; status?: number }> {
   const headers: Record<string, string> = {};
   const token = getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -33,11 +33,11 @@ async function request<T>(
       body: isFormData ? (body as FormData) : body ? JSON.stringify(body) : undefined,
     });
 
-    if (res.status === 204) return { data: null, error: null };
+    if (res.status === 204) return { data: null, error: null, status: 204 };
 
     const json = await res.json();
-    if (!res.ok) return { data: null, error: json.error || 'Request failed' };
-    return { data: json as T, error: null };
+    if (!res.ok) return { data: null, error: json.error || 'Request failed', status: res.status };
+    return { data: json as T, error: null, status: res.status };
   } catch (err: any) {
     return { data: null, error: err.message || 'Network error' };
   }

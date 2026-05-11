@@ -181,13 +181,10 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
   const handleQRScan = async (data: string) => {
     setShowScanner(false);
 
-    // Check if it's a transaction QR or employer link QR
-    if (data.startsWith('qr:')) {
-      await processQRTransaction(data);
-    } else if (data.startsWith('employer:')) {
+    if (data.startsWith('employer:')) {
       await linkToEmployer(data);
     } else {
-      showWarning('Invalid QR Code', 'The scanned QR code is not valid');
+      await processQRTransaction(data);
     }
   };
 
@@ -196,21 +193,36 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
 
     setLoading(true);
     try {
-      const { data, error } = await qrTransactions.process({ qr_code: qrCode });
+      const { data, error, status } = await qrTransactions.process({ qr_code: qrCode });
 
-      if (error) {
-        throw new Error('Invalid or already used QR code');
+      if (status === 404) {
+        showError('Invalid QR Code', 'Invalid QR code');
+        return;
+      }
+      if (status === 409) {
+        showError('Already Used', 'This QR has already been used');
+        return;
+      }
+      if (error || !data?.success) {
+        showError('Transaction Failed', error || 'Invalid or already used QR code');
+        return;
       }
 
-      if (!data?.success) {
-        throw new Error('Invalid or already used QR code');
+      const type = data.transaction_type;
+      const action = data.action;
+
+      if (type === 'attendance' && action === 'clock_in') {
+        showSuccess('Clocked In', 'Clocked in successfully');
+      } else if (type === 'attendance' && action === 'clock_out') {
+        const hours = data.hours_worked != null ? ` — ${parseFloat(data.hours_worked).toFixed(2)} hours worked` : '';
+        showSuccess('Clocked Out', `Clocked out successfully${hours}`);
+      } else if (type === 'loan') {
+        showSuccess('Loan Received', 'Loan received successfully');
+      } else if (type === 'wage_payment') {
+        showSuccess('Wages Received', 'Wages received');
+      } else {
+        showSuccess('Transaction Completed', 'Transaction completed successfully');
       }
-
-      const typeLabel = (data.transaction_type || 'Transaction')
-        .replace(/_/g, ' ')
-        .replace(/\b\w/g, (l: string) => l.toUpperCase());
-
-      showSuccess('Transaction Completed', `${typeLabel} completed successfully!`);
     } catch (error: any) {
       showError('Transaction Failed', error.message || 'Invalid or already used QR code');
     } finally {

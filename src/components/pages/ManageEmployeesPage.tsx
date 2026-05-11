@@ -68,6 +68,7 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
   const [adjustments, setAdjustments] = useState<Adjustment>({ merits: 0, demerits: 0, advances: 0, loanDeductions: 0 });
   const [showQRCode, setShowQRCode] = useState(false);
   const [qrCodeValue, setQrCodeValue] = useState('');
+  const [showDirectPayment, setShowDirectPayment] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null);
@@ -232,6 +233,7 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
     setAdjustmentReason('');
     setShowQRCode(false);
     setQrCodeValue('');
+    setShowDirectPayment(false);
   };
 
   const handleSetWages = async () => {
@@ -244,19 +246,17 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
     try {
       const paymentAmount = parseFloat(wageAmount);
 
-      // Contract employee - generate QR code for direct payment
+      // Contract employee - generate QR code for payment
       if (selectedEmployee.employment_type === 'contract') {
-        const timestamp = Date.now();
-        const qrCode = `qr:pay_contract_wages:${user?.id}:${selectedEmployee.id}:${timestamp}`;
+        const qrCode = crypto.randomUUID();
 
         const { error: qrError } = await qrTransactions.create({
           qr_code: qrCode,
-          transaction_type: 'pay_contract_wages',
+          transaction_type: 'wage_payment',
           employee_id: selectedEmployee.id,
-          employer_id: user?.id,
           amount: paymentAmount,
-          currency: currency,
-          status: 'pending'
+          status: 'pending',
+          metadata: { currency }
         });
 
         if (qrError) throw new Error(qrError);
@@ -333,7 +333,7 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
       const totalAmount = amount + (amount * rate / 100);
       const monthlyDeduction = totalAmount / tenure;
 
-      const { error: loanError } = await wages.loans.create({
+      const { data: loanResult, error: loanError } = await wages.loans.create({
         employee_id: selectedEmployee.id,
         employer_id: user?.id,
         amount,
@@ -341,15 +341,31 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
         total_amount: totalAmount,
         remaining_amount: totalAmount,
         paid_amount: 0,
-        status: 'active',
+        status: 'pending',
         currency: currentCurrency,
         tenure_months: tenure,
-        monthly_deduction: monthlyDeduction
+        monthly_deduction: monthlyDeduction,
+        loan_date: new Date().toISOString()
       });
       if (loanError) throw new Error(loanError);
 
-      toast.showSuccess('Success', 'Loan granted successfully!');
-      closeModal();
+      if (loanResult?.employee_has_app) {
+        const qrCode = crypto.randomUUID();
+        const { error: qrError } = await qrTransactions.create({
+          employee_id: selectedEmployee.id,
+          transaction_type: 'loan',
+          amount,
+          status: 'pending',
+          qr_code: qrCode,
+          metadata: { loan_id: loanResult.id }
+        });
+        if (qrError) throw new Error(qrError);
+        setQrCodeValue(qrCode);
+        setShowQRCode(true);
+      } else {
+        setShowDirectPayment(true);
+      }
+
       fetchEmployeeData();
     } catch (error: any) {
       toast.showError('Error', 'Error granting loan: ' + error.message);
@@ -935,7 +951,7 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
                 </>
               )}
 
-              {actionType === 'loan' && (
+              {actionType === 'loan' && !showQRCode && !showDirectPayment && (
                 <>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Grant Loan</h3>
                   <p className="text-sm text-gray-600 mb-4">to {selectedEmployee.name}</p>
@@ -1015,6 +1031,53 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
                       {loading ? 'Processing...' : 'Grant Loan'}
                     </button>
                   </div>
+                </>
+              )}
+
+              {actionType === 'loan' && showQRCode && (
+                <>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Loan QR Code</h3>
+                  <p className="text-sm text-gray-600 mb-4">Ask {selectedEmployee.name} to scan this to receive the loan</p>
+
+                  <div className="bg-white p-4 rounded-lg border-2 border-purple-200 mb-4">
+                    <div className="w-48 h-48 mx-auto flex items-center justify-center">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrCodeValue)}&size=200x200`}
+                        alt="QR Code"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-500 text-center mb-6">
+                    Employee scans this QR to confirm loan receipt
+                  </p>
+
+                  <button
+                    onClick={() => { toast.showSuccess('Loan Granted', 'Loan granted successfully!'); closeModal(); }}
+                    className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 px-4 rounded-lg font-medium transition-colors"
+                  >
+                    Close
+                  </button>
+                </>
+              )}
+
+              {actionType === 'loan' && showDirectPayment && (
+                <>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Loan Granted</h3>
+                  <div className="bg-purple-50 rounded-lg p-4 border border-purple-200 mb-4">
+                    <p className="text-sm text-gray-700 mb-1">Amount: <span className="font-bold text-purple-600">{currentCurrency} {parseFloat(loanAmount).toFixed(2)}</span></p>
+                    <p className="text-sm text-gray-700">Employee: <span className="font-semibold">{selectedEmployee.name}</span></p>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-6">
+                    This employee does not use the app. Please complete the payment directly.
+                  </p>
+                  <button
+                    onClick={() => { toast.showSuccess('Loan Granted', 'Loan granted successfully!'); closeModal(); }}
+                    className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 px-4 rounded-lg font-medium transition-colors"
+                  >
+                    Confirm Direct Payment
+                  </button>
                 </>
               )}
 
@@ -1110,14 +1173,14 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
                     <button
                       onClick={async () => {
                         if (!user || !selectedEmployee) return;
-                        const qrCode = `qr:foreclose_loan:${user.id}:${selectedEmployee.id}:${Date.now()}`;
+                        const qrCode = crypto.randomUUID();
                         const { error } = await qrTransactions.create({
-                          employer_id: user.id,
                           employee_id: selectedEmployee.id,
-                          transaction_type: 'foreclose_loan',
+                          transaction_type: 'loan',
                           qr_code: qrCode,
                           amount: totalLoanBalance,
-                          status: 'pending'
+                          status: 'pending',
+                          metadata: { loan_ids: employeeLoans.map(l => l.id) }
                         });
                         if (!error) {
                           setQrCodeValue(qrCode);

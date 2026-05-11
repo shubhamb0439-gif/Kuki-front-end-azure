@@ -53,6 +53,7 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
   const [generatingStatement, setGeneratingStatement] = useState(false);
   const [empList, setEmpList] = useState<any[]>([]);
   const [selectedEmpId, setSelectedEmpId] = useState('');
+  const [filterMode, setFilterMode] = useState<'today' | 'week' | 'month'>('month');
 
   useSwipeGesture({
     onSwipeLeft: () => { window.location.hash = '#/messages'; }
@@ -60,7 +61,7 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
 
   useEffect(() => {
     fetchAttendance();
-  }, [user, currentDate, selectedEmpId]);
+  }, [user, currentDate, selectedEmpId, filterMode]);
 
   useEffect(() => {
     if (!user || user.role !== 'employer') return;
@@ -70,13 +71,36 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
   const fetchAttendance = async () => {
     if (!user) return;
 
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-    const startDateStr = toDateStr(year, month, 1);
-    const endDateStr = toDateStr(year, month, new Date(year, month + 1, 0).getDate());
+    const now = new Date();
+    let startDateStr: string;
+    let endDateStr: string;
 
-    const targetId = selectedEmpId || user.id;
-    const { data, error } = await attendance.list({ employee_id: targetId, from: startDateStr, to: endDateStr });
+    if (user.role === 'employer' && selectedEmpId && filterMode !== 'month') {
+      if (filterMode === 'today') {
+        startDateStr = toDateStr(now.getFullYear(), now.getMonth(), now.getDate());
+        endDateStr = startDateStr;
+      } else {
+        // week: Sunday to Saturday of current week
+        const dayOfWeek = now.getDay();
+        const sunday = new Date(now);
+        sunday.setDate(now.getDate() - dayOfWeek);
+        const saturday = new Date(sunday);
+        saturday.setDate(sunday.getDate() + 6);
+        startDateStr = toDateStr(sunday.getFullYear(), sunday.getMonth(), sunday.getDate());
+        endDateStr = toDateStr(saturday.getFullYear(), saturday.getMonth(), saturday.getDate());
+      }
+    } else {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      startDateStr = toDateStr(year, month, 1);
+      endDateStr = toDateStr(year, month, new Date(year, month + 1, 0).getDate());
+    }
+
+    const params: Record<string, string> = { from: startDateStr, to: endDateStr };
+    if (user.role === 'employer' && selectedEmpId) {
+      params.employee_id = selectedEmpId;
+    }
+    const { data, error } = await attendance.list(params);
 
     if (error || !data) return;
 
@@ -218,18 +242,37 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
       <div className="max-w-lg mx-auto p-4 pt-20 pb-8">
         {/* Employee dropdown for employers */}
         {user?.role === 'employer' && empList.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">View Attendance For</label>
-            <select
-              value={selectedEmpId}
-              onChange={e => { setSelectedEmpId(e.target.value); setSelectedDate(null); setSelectedDayData(null); }}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
-            >
-              <option value="">Select an employee</option>
-              {empList.map((emp: any) => (
-                <option key={emp.id} value={emp.id}>{emp.name || emp.email}</option>
-              ))}
-            </select>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4 space-y-3">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">View Attendance For</label>
+              <select
+                value={selectedEmpId}
+                onChange={e => { setSelectedEmpId(e.target.value); setFilterMode('month'); setSelectedDate(null); setSelectedDayData(null); }}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="">Select an employee</option>
+                {empList.map((emp: any) => (
+                  <option key={emp.id} value={emp.id}>{emp.name || emp.email}</option>
+                ))}
+              </select>
+            </div>
+            {selectedEmpId && (
+              <div className="flex gap-2">
+                {(['today', 'week', 'month'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => { setFilterMode(mode); setSelectedDate(null); setSelectedDayData(null); }}
+                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                      filterMode === mode
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    {mode === 'today' ? 'Today' : mode === 'week' ? 'This Week' : 'This Month'}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
