@@ -2,11 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, CheckCircle, QrCode, X, FileText, Clock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { employees, profiles, attendance, wages, messages, admin } from '../../lib/api';
+import { employees as employeesApi, profiles, attendance, wages, messages, admin, qrTransactions } from '../../lib/api';
 import { Header } from '../common/Header';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import QRCode from 'react-qr-code';
-import { supabase } from '../../lib/supabase';
 
 interface AttendanceRecord {
   attendance_date: string;
@@ -95,19 +94,11 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
 
   const fetchEmployees = async () => {
     if (!user) return;
-
-    const { data } = await supabase
-      .from('employees')
-      .select('id, name, user_id, profiles:user_id(name)')
-      .eq('employer_id', user.id)
-      .eq('status', 'active')
-      .order('name');
-
+    const { data } = await employeesApi.list();
     if (data) {
-      // For smartphone employees, name is null — use the linked profile name instead
       const normalized = data.map((emp: any) => ({
         ...emp,
-        display_name: emp.name || emp.profiles?.name || 'Unknown Employee'
+        display_name: emp.name || emp.email || 'Unknown Employee'
       }));
       setEmployees(normalized);
     }
@@ -123,28 +114,16 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
     const startDate = `${startDateObj.getFullYear()}-${String(startDateObj.getMonth() + 1).padStart(2, '0')}-${String(startDateObj.getDate()).padStart(2, '0')}`;
     const endDate = `${endDateObj.getFullYear()}-${String(endDateObj.getMonth() + 1).padStart(2, '0')}-${String(endDateObj.getDate()).padStart(2, '0')}`;
 
-    let query = supabase
-      .from('attendance_records')
-      .select('*')
-      .gte('attendance_date', startDate)
-      .lte('attendance_date', endDate);
-
-    if (user.role === 'employer') {
-      query = query.eq('employer_id', user.id);
-      if (selectedEmployeeId) {
-        const selectedEmp = employees.find(e => e.id === selectedEmployeeId);
-        const empUserIdFilter = selectedEmp?.user_id || selectedEmployeeId;
-        query = query.eq('employee_id', empUserIdFilter);
-      }
-    } else {
-      query = query.eq('employee_id', user.id);
+    const params: Record<string, string> = { from: startDate, to: endDate };
+    if (user.role === 'employer' && selectedEmployeeId) {
+      params.employee_id = selectedEmployeeId;
     }
 
-    const { data } = await query;
+    const { data } = await attendance.list(params);
 
     if (data) {
       const attendanceMap: Record<string, AttendanceRecord> = {};
-      data.forEach(record => {
+      data.forEach((record: any) => {
         attendanceMap[record.attendance_date] = {
           attendance_date: record.attendance_date,
           status: record.status,
@@ -164,17 +143,13 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
     const status = getDateStatus(date);
 
     if (user?.role === 'employer' && !selectedEmployeeId) {
-      // All Employees view — fetch per-employee records for this date
-      const { data: dayRecords } = await supabase
-        .from('attendance_records')
-        .select('*')
-        .eq('employer_id', user.id)
-        .eq('attendance_date', dateStr);
+      // All Employees view — fetch all records for this date
+      const { data: dayRecords } = await attendance.list({ from: dateStr, to: dateStr });
 
       setSelectedDateSummary(null);
       if (dayRecords && dayRecords.length > 0) {
         const withNames = dayRecords.map((r: any) => {
-          const emp = employees.find(e => e.user_id === r.employee_id);
+          const emp = employees.find((e: any) => e.id === r.employee_id);
           return { ...r, employee_name: emp?.display_name || 'Unknown Employee' };
         });
         withNames.sort((a: any, b: any) => a.employee_name.localeCompare(b.employee_name));
@@ -214,20 +189,16 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
 
     try {
       const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-      const qrCode = `qr:mark_attendance:${user.id}:${selectedEmployeeId}:${dateStr}:${Date.now()}`;
+      const qrCode = crypto.randomUUID();
 
-      const { data, error } = await supabase
-        .from('qr_transactions')
-        .insert({
-          employer_id: user.id,
-          employee_id: selectedEmployeeId,
-          transaction_type: 'mark_attendance',
-          qr_code: qrCode,
-          status: 'pending',
-          metadata: { attendance_date: dateStr }
-        })
-        .select()
-        .single();
+      const { data, error } = await qrTransactions.create({
+        employee_id: selectedEmployeeId,
+        transaction_type: 'attendance',
+        amount: 0,
+        status: 'pending',
+        qr_code: qrCode,
+        metadata: { attendance_date: dateStr }
+      });
 
       if (!error && data) {
         setCurrentTransactionId(data.id);
@@ -235,7 +206,7 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
         setQrCodeValue(qrCode);
         setShowQRModal(true);
       } else {
-        toast.showError('Error', 'Error generating QR code: ' + (error?.message || 'Unknown error'));
+        toast.showError('Error', 'Error generating QR code: ' + (error || 'Unknown error'));
       }
     } catch (err: any) {
       toast.showError('Error', err.message);
@@ -248,30 +219,20 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
     try {
       const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`;
 
-      const { data: empData } = await supabase
-        .from('employees')
-        .select('employer_id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (!empData) {
+      const { data: empList } = await employeesApi.list();
+      const employerRecord = (empList || []).find((e: any) => e.employer_id);
+      if (!employerRecord?.employer_id) {
         toast.showError('Error', 'Employer not found');
         return;
       }
 
-      const { error } = await supabase
-        .from('attendance_records')
-        .upsert({
-          employer_id: empData.employer_id,
-          employee_id: user.id,
-          attendance_date: dateStr,
-          status: leaveType,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'employer_id,employee_id,attendance_date'
-        });
+      const { error } = await attendance.manualEntry({
+        employer_id: employerRecord.employer_id,
+        attendance_date: dateStr,
+        status: leaveType
+      });
 
-      if (error) throw error;
+      if (error) throw new Error(error);
 
       toast.showSuccess('Success', `${leaveType === 'leave' ? 'Leave' : 'Sick Leave'} request submitted successfully!`);
       setShowLeaveModal(false);
@@ -295,23 +256,20 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
       const endDate = new Date(endYear, endMonth, 0);
       const endDateStr = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
-      const { data: attendanceRecords, error: fetchError } = await supabase
-        .from('attendance_records')
-        .select('*')
-        .eq('employee_id', selectedEmployeeId)
-        .eq('employer_id', user.id)
-        .gte('attendance_date', startDateStr)
-        .lte('attendance_date', endDateStr)
-        .order('attendance_date', { ascending: true });
+      const { data: attendanceRecords, error: fetchError } = await attendance.list({
+        employee_id: selectedEmployeeId,
+        from: startDateStr,
+        to: endDateStr
+      });
 
-      if (fetchError) throw fetchError;
+      if (fetchError) throw new Error(fetchError);
 
       if (!attendanceRecords || attendanceRecords.length === 0) {
         toast.showInfo('No Records', 'No attendance records found for the selected period');
         return;
       }
 
-      const selectedEmployee = employees.find(e => e.id === selectedEmployeeId);
+      const selectedEmployee = employees.find((e: any) => e.id === selectedEmployeeId);
 
       let totalHours = 0;
       let presentDays = 0;
@@ -366,17 +324,13 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
       statementContent += `Total Days Sick Leave: ${sickLeaveDays}\n`;
       statementContent += `\n👉 Total Hours Worked This Month: ${totalHoursWhole} hrs ${totalMinutes} mins\n`;
 
-      const startDateObj = new Date(startYear, startMonth - 1, 1);
-      const endDateObj = new Date(endYear, endMonth, 0);
+      const targetUserId = selectedEmployee?.user_id || selectedEmployeeId;
+      const { error: statementError } = await wages.statements.create({
+        user_id: targetUserId,
+        message: statementContent
+      });
 
-      const { error: statementError } = await supabase
-        .from('statements')
-        .insert({
-          user_id: selectedEmployeeId,
-          message: statementContent
-        });
-
-      if (statementError) throw statementError;
+      if (statementError) throw new Error(statementError);
 
       toast.showSuccess('Success', 'Attendance statement generated successfully!');
       setShowStatementModal(false);
