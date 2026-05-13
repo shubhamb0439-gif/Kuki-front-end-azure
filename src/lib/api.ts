@@ -80,7 +80,7 @@ export const profiles = {
   uploadPhoto: (id: string, file: File) => {
     const formData = new FormData();
     formData.append('photo', file);
-    return request<{ profile_photo: string }>('POST', `/profiles/${id}/photo`, formData, true);
+    return request<any>('POST', `/profiles/${id}/photo`, formData, true);
   },
 };
 

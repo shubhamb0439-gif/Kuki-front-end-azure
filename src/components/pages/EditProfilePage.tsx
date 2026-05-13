@@ -70,23 +70,14 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
       if (!user) return;
       setIsLoadingProfile(true);
       const { data } = await profiles.get(user.id);
-      if (data) {
-        setName(data.name || user.name || '');
-        setPhone(data.phone || '');
-        setEmail(data.email || user.email || '');
-        setProfession(data.profession || '');
-        setCurrency(data.currency || 'USD');
-        setPhotoPreview(data.profile_photo || undefined);
-        setCanEditEmail(!data.email);
-      } else {
-        // Fallback to auth state if API fails
-        setName(user.name || '');
-        setPhone(user.phone || '');
-        setEmail(user.email || '');
-        setProfession(user.profession || '');
-        setPhotoPreview(user.profile_photo || undefined);
-        setCanEditEmail(!user.email);
-      }
+      // Always apply from API; fall back to auth state field-by-field
+      setName(data?.name ?? user.name ?? '');
+      setPhone(data?.phone ?? user.phone ?? '');
+      setEmail(data?.email ?? user.email ?? '');
+      setProfession(data?.profession ?? user.profession ?? '');
+      setCurrency(data?.currency ?? 'USD');
+      setPhotoPreview(data?.profile_photo ?? user.profile_photo ?? undefined);
+      setCanEditEmail(!(data?.email ?? user.email));
       setIsLoadingProfile(false);
     };
     loadProfile();
@@ -177,13 +168,22 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
 
     setIsUploading(true);
     try {
-      const { data: uploadData, error: uploadError } = await profiles.uploadPhoto(user.id, file);
+      const { data: profile, error: uploadError } = await profiles.uploadPhoto(user.id, file);
       if (uploadError) throw new Error(uploadError);
 
-      const newPhotoUrl = uploadData?.profile_photo;
-      if (newPhotoUrl) {
-        setPhotoPreview(newPhotoUrl);
-        updateUser({ profile_photo: newPhotoUrl });
+      if (profile) {
+        // Backend returns the full updated profile — apply everything at once
+        if (profile.profile_photo) setPhotoPreview(profile.profile_photo);
+        if (profile.name) setName(profile.name);
+        if (profile.phone) setPhone(profile.phone);
+        if (profile.profession) setProfession(profile.profession);
+        if (profile.currency) setCurrency(profile.currency);
+        updateUser({
+          profile_photo: profile.profile_photo,
+          name: profile.name,
+          phone: profile.phone,
+          profession: profile.profession,
+        });
       }
       toast.showSuccess('Success', 'Profile photo updated successfully!');
     } catch (error: any) {

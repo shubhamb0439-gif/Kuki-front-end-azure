@@ -329,26 +329,16 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
       const amount = parseFloat(loanAmount);
       const rate = parseFloat(interestRate);
       const tenure = parseInt(tenureMonths);
-      const totalAmount = amount + (amount * rate / 100);
-      const monthlyDeduction = totalAmount / tenure;
 
-      const { data: loanResult, error: loanError } = await wages.loans.create({
-        employee_id: selectedEmployee.id,
-        employer_id: user?.id,
-        amount,
-        interest_rate: rate,
-        total_amount: totalAmount,
-        remaining_amount: totalAmount,
-        paid_amount: 0,
-        status: 'pending',
-        currency: currentCurrency,
-        tenure_months: tenure,
-        monthly_deduction: monthlyDeduction,
-        loan_date: new Date().toISOString()
-      });
-      if (loanError) throw new Error(loanError);
+      const hasApp = Boolean(
+        selectedEmployee.user_id &&
+        String(selectedEmployee.user_id).trim() !== '' &&
+        String(selectedEmployee.user_id).trim() !== 'null' &&
+        String(selectedEmployee.user_id).trim() !== 'undefined'
+      );
 
-      if (loanResult?.employee_has_app) {
+      if (hasApp) {
+        // Linked employee — backend auto-creates the loan when the QR is scanned
         const qrCode = crypto.randomUUID();
         const { error: qrError } = await qrTransactions.create({
           employee_id: selectedEmployee.id,
@@ -356,17 +346,38 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
           amount,
           status: 'pending',
           qr_code: qrCode,
-          metadata: { loan_id: loanResult.id }
+          metadata: {
+            tenure_months: tenure,
+            interest_rate: rate,
+            currency: currentCurrency,
+            employer_id: user?.id,
+          }
         });
         if (qrError) throw new Error(qrError);
         setQrCodeValue(qrCode);
         setShowQRCode(true);
       } else {
+        // Non-app employee — create loan record directly, no QR needed
+        const totalAmount = amount + (amount * rate / 100);
+        const { error: loanError } = await wages.loans.create({
+          employee_id: selectedEmployee.id,
+          employer_id: user?.id,
+          amount,
+          interest_rate: rate,
+          total_amount: totalAmount,
+          remaining_amount: totalAmount,
+          paid_amount: 0,
+          status: 'pending',
+          currency: currentCurrency,
+          tenure_months: tenure,
+          monthly_deduction: totalAmount / tenure,
+          loan_date: new Date().toISOString()
+        });
+        if (loanError) throw new Error(loanError);
         toast.showSuccess('Loan Granted', 'Loan granted successfully!');
         closeModal();
+        fetchEmployeeData();
       }
-
-      fetchEmployeeData();
     } catch (error: any) {
       toast.showError('Error', 'Error granting loan: ' + error.message);
     } finally {
