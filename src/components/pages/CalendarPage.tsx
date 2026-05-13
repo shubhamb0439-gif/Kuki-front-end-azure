@@ -83,9 +83,12 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
   }, [user]);
 
   useEffect(() => {
-    if (!user || user.role !== 'employee') return;
-    return () => {};
-  }, [user]);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') fetchAttendance();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [user, currentDate, selectedEmployeeId]);
 
   const subscribeToQRTransactions = () => {
     if (!user) return;
@@ -124,8 +127,9 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
     if (data) {
       const attendanceMap: Record<string, AttendanceRecord> = {};
       data.forEach((record: any) => {
-        attendanceMap[record.attendance_date] = {
-          attendance_date: record.attendance_date,
+        const dateKey = (record.attendance_date || '').substring(0, 10);
+        attendanceMap[dateKey] = {
+          attendance_date: dateKey,
           status: record.status,
           scanned_at: record.scanned_at,
           login_time: record.login_time,

@@ -68,6 +68,14 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
     employees.list().then(({ data }) => { if (data) setEmpList(data); });
   }, [user]);
 
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') fetchAttendance();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [user, currentDate, selectedEmpId, filterMode]);
+
   const fetchAttendance = async () => {
     if (!user) return;
 
@@ -123,12 +131,12 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
     // Group all records by date
     const dayMap: Record<string, DayData> = {};
     data.forEach((record: any) => {
-      const dateStr = record.attendance_date;
+      const dateStr = (record.attendance_date || '').substring(0, 10);
       if (!dayMap[dateStr]) {
         dayMap[dateStr] = { records: [], hasLogin: false, hasAnyPending: false, hasAnyCompleted: false };
       }
       dayMap[dateStr].records.push({
-        attendance_date: record.attendance_date,
+        attendance_date: dateStr,
         status: record.status,
         scanned_at: record.scanned_at,
         login_time: record.login_time,
