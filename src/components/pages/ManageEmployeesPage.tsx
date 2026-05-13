@@ -185,7 +185,7 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
 
     // Loans
     const { data: loansData } = await wages.loans.list(selectedEmployee.id);
-    const activeLoans = (loansData || []).filter((l: any) => l.status === 'active');
+    const activeLoans = (loansData || []).filter((l: any) => l.status === 'active' || l.status === 'pending');
     setEmployeeLoans(activeLoans);
     const total = activeLoans.reduce((sum: number, loan: any) => sum + (loan.remaining_amount || loan.total_amount), 0);
     setTotalLoanBalance(total);
@@ -469,25 +469,21 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
     });
   };
 
-  const ProfilePhoto = ({ name, photo }: { name: string; photo?: string }) => {
-    if (photo) {
-      return (
+  const ProfilePhoto = ({ name, photo }: { name: string; photo?: string }) => (
+    <div className="relative w-full h-full">
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-emerald-400 rounded-full flex items-center justify-center">
+        <span className="text-white font-semibold text-lg">{name ? name.charAt(0).toUpperCase() : '?'}</span>
+      </div>
+      {photo && photo.startsWith('http') && (
         <img
           src={photo}
           alt={name}
-          className="w-full h-full object-cover rounded-full"
+          className="absolute inset-0 w-full h-full object-cover rounded-full"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
-      );
-    }
-
-    return (
-      <div className="w-full h-full bg-gradient-to-br from-blue-400 to-emerald-400 rounded-full flex items-center justify-center">
-        <span className="text-white font-semibold text-lg">
-          {name.charAt(0).toUpperCase()}
-        </span>
-      </div>
-    );
-  };
+      )}
+    </div>
+  );
 
   const calculateTotalLoanPayable = () => {
     if (!loanAmount || !interestRate) return 0;

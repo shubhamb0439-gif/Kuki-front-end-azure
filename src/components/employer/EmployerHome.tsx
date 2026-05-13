@@ -365,25 +365,21 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
     setShowEmployeeModal(true);
   };
 
-  const ProfilePhoto = ({ name, photo }: { name: string; photo?: string }) => {
-    if (photo) {
-      return (
+  const ProfilePhoto = ({ name, photo }: { name: string; photo?: string }) => (
+    <div className="relative w-full h-full">
+      <div className={`absolute inset-0 bg-gradient-to-br ${colors.gradientFrom} ${colors.gradientTo} rounded-full flex items-center justify-center`}>
+        <span className="text-white font-semibold text-lg">{name ? name.charAt(0).toUpperCase() : '?'}</span>
+      </div>
+      {photo && photo.startsWith('http') && (
         <img
           src={photo}
           alt={name}
-          className="w-full h-full object-cover rounded-full"
+          className="absolute inset-0 w-full h-full object-cover rounded-full"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
         />
-      );
-    }
-
-    return (
-      <div className={`w-full h-full bg-gradient-to-br ${colors.gradientFrom} ${colors.gradientTo} rounded-full flex items-center justify-center`}>
-        <span className="text-white font-semibold text-lg">
-          {name.charAt(0).toUpperCase()}
-        </span>
-      </div>
-    );
-  };
+      )}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-white">
