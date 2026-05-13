@@ -116,24 +116,19 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
       return;
     }
 
-    // Validate phone format if provided
-    if (phone && !/^\+?[1-9]\d{1,14}$/.test(phone.replace(/[\s-]/g, ''))) {
-      toast.showWarning('Invalid Phone', 'Please enter a valid phone number (e.g., +1234567890)');
+    // Basic phone sanity check — let backend enforce strict format
+    if (phone && phone.replace(/[\s\-\+\(\)]/g, '').length < 7) {
+      toast.showWarning('Invalid Phone', 'Phone number is too short');
       return;
     }
 
     setSaving(true);
     try {
       // profile_photo intentionally excluded — handled by POST /profiles/{id}/photo
-      const updateData: Record<string, any> = { name, phone, currency };
-
-      if (canEditEmail && email) {
-        updateData.email = email;
-      }
-
-      if (user.role === 'employee') {
-        updateData.profession = profession;
-      }
+      const updateData: Record<string, any> = { name, currency };
+      if (phone) updateData.phone = phone;
+      if (canEditEmail && email) updateData.email = email;
+      if (user.role === 'employee' && profession) updateData.profession = profession;
 
       const { error } = await profiles.update(user.id, updateData);
       if (error) throw new Error(error);
@@ -168,22 +163,25 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
 
     setIsUploading(true);
     try {
-      const { data: profile, error: uploadError } = await profiles.uploadPhoto(user.id, file);
+      const { data: uploadResp, error: uploadError } = await profiles.uploadPhoto(user.id, file);
       if (uploadError) throw new Error(uploadError);
 
-      if (profile) {
-        // Backend returns the full updated profile — apply everything at once
-        if (profile.profile_photo) setPhotoPreview(profile.profile_photo);
-        if (profile.name) setName(profile.name);
-        if (profile.phone) setPhone(profile.phone);
-        if (profile.profession) setProfession(profile.profession);
-        if (profile.currency) setCurrency(profile.currency);
-        updateUser({
-          profile_photo: profile.profile_photo,
-          name: profile.name,
-          phone: profile.phone,
-          profession: profile.profession,
-        });
+      // Try every field name the backend might use for the photo URL
+      let photoUrl: string | undefined =
+        uploadResp?.profile_photo ||
+        uploadResp?.photo_url ||
+        uploadResp?.url ||
+        uploadResp?.data?.profile_photo;
+
+      // If the response didn't carry the URL, fetch the profile fresh
+      if (!photoUrl) {
+        const { data: fresh } = await profiles.get(user.id);
+        photoUrl = fresh?.profile_photo;
+      }
+
+      if (photoUrl) {
+        setPhotoPreview(photoUrl);
+        updateUser({ profile_photo: photoUrl });
       }
       toast.showSuccess('Success', 'Profile photo updated successfully!');
     } catch (error: any) {
