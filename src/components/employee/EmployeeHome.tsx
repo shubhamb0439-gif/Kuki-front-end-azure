@@ -212,10 +212,13 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
       const action = data.action;
 
       if (type === 'attendance' && action === 'clock_in') {
-        showSuccess('Clocked In', 'Clocked in successfully');
+        showSuccess('Clock In Successful', 'Clocked in successfully');
       } else if (type === 'attendance' && action === 'clock_out') {
         const hours = data.hours_worked != null ? ` — ${parseFloat(data.hours_worked).toFixed(2)} hours worked` : '';
-        showSuccess('Clocked Out', `Clocked out successfully${hours}`);
+        showSuccess('Clock Out Successful', `Clocked out successfully${hours}`);
+      } else if (type === 'attendance' && action === 'regularized') {
+        const date = data.attendance_date ? ` for ${data.attendance_date}` : '';
+        showSuccess('Attendance Regularized', `Attendance regularized${date}`);
       } else if (type === 'loan') {
         showSuccess('Loan Received', 'Loan received successfully');
       } else if (type === 'wage_payment') {

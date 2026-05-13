@@ -783,6 +783,7 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
                       setQrCodeValue('');
                       setCurrentTransactionId(null);
                       currentTransactionIdRef.current = null;
+                      fetchAttendance();
                     }}
                     className="text-gray-500 hover:text-gray-700"
                   >
