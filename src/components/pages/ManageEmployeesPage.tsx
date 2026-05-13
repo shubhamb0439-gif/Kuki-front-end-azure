@@ -68,7 +68,6 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
   const [adjustments, setAdjustments] = useState<Adjustment>({ merits: 0, demerits: 0, advances: 0, loanDeductions: 0 });
   const [showQRCode, setShowQRCode] = useState(false);
   const [qrCodeValue, setQrCodeValue] = useState('');
-  const [showDirectPayment, setShowDirectPayment] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null);
@@ -363,7 +362,8 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
         setQrCodeValue(qrCode);
         setShowQRCode(true);
       } else {
-        setShowDirectPayment(true);
+        toast.showSuccess('Loan Granted', 'Loan granted successfully!');
+        closeModal();
       }
 
       fetchEmployeeData();
@@ -951,7 +951,7 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
                 </>
               )}
 
-              {actionType === 'loan' && !showQRCode && !showDirectPayment && (
+              {actionType === 'loan' && !showQRCode && (
                 <>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Grant Loan</h3>
                   <p className="text-sm text-gray-600 mb-4">to {selectedEmployee.name}</p>
@@ -1062,26 +1062,7 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
                 </>
               )}
 
-              {actionType === 'loan' && showDirectPayment && (
-                <>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Loan Granted</h3>
-                  <div className="bg-purple-50 rounded-lg p-4 border border-purple-200 mb-4">
-                    <p className="text-sm text-gray-700 mb-1">Amount: <span className="font-bold text-purple-600">{currentCurrency} {parseFloat(loanAmount).toFixed(2)}</span></p>
-                    <p className="text-sm text-gray-700">Employee: <span className="font-semibold">{selectedEmployee.name}</span></p>
-                  </div>
-                  <p className="text-sm text-gray-600 mb-6">
-                    This employee does not use the app. Please complete the payment directly.
-                  </p>
-                  <button
-                    onClick={() => { toast.showSuccess('Loan Granted', 'Loan granted successfully!'); closeModal(); }}
-                    className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 px-4 rounded-lg font-medium transition-colors"
-                  >
-                    Confirm Direct Payment
-                  </button>
-                </>
-              )}
-
-              {(actionType === 'merit' || actionType === 'demerit' || actionType === 'advance' || actionType === 'loan_deduction') && (
+{(actionType === 'merit' || actionType === 'demerit' || actionType === 'advance' || actionType === 'loan_deduction') && (
                 <>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 capitalize">{actionType.replace('_', ' ')}</h3>
                   <p className="text-sm text-gray-600 mb-4">for {selectedEmployee.name}</p>

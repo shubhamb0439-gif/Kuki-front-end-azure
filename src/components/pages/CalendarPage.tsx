@@ -405,10 +405,7 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
       today.setHours(0, 0, 0, 0);
       const checkDate = new Date(date);
       checkDate.setHours(0, 0, 0, 0);
-
-      if (checkDate < today) {
-        return 'absent';
-      }
+      if (checkDate < today) return 'absent';
       return null;
     }
 

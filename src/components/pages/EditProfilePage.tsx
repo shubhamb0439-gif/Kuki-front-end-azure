@@ -4,11 +4,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useOnboarding } from '../../contexts/OnboardingContext';
-import { employees, profiles, attendance, wages, messages, admin } from '../../lib/api';
+import { profiles } from '../../lib/api';
 import { Header } from '../common/Header';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import LanguageSelector from '../common/LanguageSelector';
-import { supabase } from '../../lib/supabase';
 
 const PROFESSIONS = [
   { id: 'gardener', name: 'Gardener' },
@@ -59,6 +58,7 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
   const [isSaving, setSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [canEditEmail, setCanEditEmail] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | undefined>(user?.profile_photo);
 
   const primaryColor = 'bg-blue-600';
   const primaryHoverColor = 'hover:bg-blue-700';
@@ -67,22 +67,15 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
   React.useEffect(() => {
     const loadProfile = async () => {
       if (!user) return;
-      const { data } = await supabase
-        .from('profiles')
-        .select('currency, phone, email')
-        .eq('id', user.id)
-        .maybeSingle();
-      if (data?.currency) {
-        setCurrency(data.currency);
-      }
-      if (data?.phone) {
-        setPhone(data.phone);
-      }
-      if (data?.email) {
-        setEmail(data.email);
-      }
-      // Allow editing email only if user doesn't have one (signed up with phone)
-      setCanEditEmail(!data?.email);
+      const { data } = await profiles.get(user.id);
+      if (!data) return;
+      if (data.name) setName(data.name);
+      if (data.phone) setPhone(data.phone);
+      if (data.email) setEmail(data.email);
+      if (data.profession) setProfession(data.profession);
+      if (data.currency) setCurrency(data.currency);
+      if (data.profile_photo) setPhotoPreview(data.profile_photo);
+      setCanEditEmail(!data.email);
     };
     loadProfile();
   }, [user]);
@@ -128,14 +121,8 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
 
     setSaving(true);
     try {
-      const updateData: any = {
-        name,
-        phone,
-        currency,
-        updated_at: new Date().toISOString()
-      };
+      const updateData: any = { name, phone, currency };
 
-      // Only include email if user can edit it (i.e., they don't already have one)
       if (canEditEmail && email) {
         updateData.email = email;
       }
@@ -144,12 +131,8 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
         updateData.profession = profession;
       }
 
-      const { error } = await supabase
-        .from('profiles')
-        .update(updateData)
-        .eq('id', user.id);
-
-      if (error) throw error;
+      const { error } = await profiles.update(user.id, updateData);
+      if (error) throw new Error(error);
 
       await refreshUser();
       toast.showSuccess('Success', 'Profile updated successfully!');
@@ -184,7 +167,9 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
       const { data: uploadData, error: uploadError } = await profiles.uploadPhoto(user.id, file);
       if (uploadError) throw new Error(uploadError);
 
-      await refreshUser();
+      if (uploadData?.profile_photo) {
+        setPhotoPreview(uploadData.profile_photo);
+      }
       toast.showSuccess('Success', 'Profile photo updated successfully!');
     } catch (error: any) {
       toast.showError('Error', 'Error uploading photo: ' + error.message);
@@ -234,7 +219,7 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
           {/* Profile Photo */}
           <div className="text-center mb-8">
             <div className="w-32 h-32 mx-auto mb-4 relative">
-              <ProfilePhoto name={name} photo={user?.profile_photo} />
+              <ProfilePhoto name={name} photo={photoPreview} />
               {isUploading && (
                 <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
                   <div className="text-white text-sm">Uploading...</div>
