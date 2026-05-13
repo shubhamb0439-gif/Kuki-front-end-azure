@@ -46,19 +46,20 @@ interface EditProfilePageProps {
 }
 
 export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePageProps) {
-  const { user, signOut, refreshUser } = useAuth();
+  const { user, signOut, refreshUser, updateUser } = useAuth();
   const { t } = useLanguage();
   const toast = useToast();
   const { setShowOnboarding } = useOnboarding();
-  const [name, setName] = useState(user?.name || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(user?.phone || '');
-  const [profession, setProfession] = useState(user?.profession || '');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [profession, setProfession] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [isSaving, setSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [canEditEmail, setCanEditEmail] = useState(false);
-  const [photoPreview, setPhotoPreview] = useState<string | undefined>(user?.profile_photo);
+  const [photoPreview, setPhotoPreview] = useState<string | undefined>(undefined);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   const primaryColor = 'bg-blue-600';
   const primaryHoverColor = 'hover:bg-blue-700';
@@ -67,15 +68,26 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
   React.useEffect(() => {
     const loadProfile = async () => {
       if (!user) return;
+      setIsLoadingProfile(true);
       const { data } = await profiles.get(user.id);
-      if (!data) return;
-      if (data.name) setName(data.name);
-      if (data.phone) setPhone(data.phone);
-      if (data.email) setEmail(data.email);
-      if (data.profession) setProfession(data.profession);
-      if (data.currency) setCurrency(data.currency);
-      if (data.profile_photo) setPhotoPreview(data.profile_photo);
-      setCanEditEmail(!data.email);
+      if (data) {
+        setName(data.name || user.name || '');
+        setPhone(data.phone || '');
+        setEmail(data.email || user.email || '');
+        setProfession(data.profession || '');
+        setCurrency(data.currency || 'USD');
+        setPhotoPreview(data.profile_photo || undefined);
+        setCanEditEmail(!data.email);
+      } else {
+        // Fallback to auth state if API fails
+        setName(user.name || '');
+        setPhone(user.phone || '');
+        setEmail(user.email || '');
+        setProfession(user.profession || '');
+        setPhotoPreview(user.profile_photo || undefined);
+        setCanEditEmail(!user.email);
+      }
+      setIsLoadingProfile(false);
     };
     loadProfile();
   }, [user]);
@@ -121,7 +133,8 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
 
     setSaving(true);
     try {
-      const updateData: any = { name, phone, currency };
+      // profile_photo intentionally excluded — handled by POST /profiles/{id}/photo
+      const updateData: Record<string, any> = { name, phone, currency };
 
       if (canEditEmail && email) {
         updateData.email = email;
@@ -134,7 +147,7 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
       const { error } = await profiles.update(user.id, updateData);
       if (error) throw new Error(error);
 
-      await refreshUser();
+      updateUser({ name, phone: phone || undefined, currency, profession: user.role === 'employee' ? profession : undefined });
       toast.showSuccess('Success', 'Profile updated successfully!');
       window.location.hash = '#/home';
     } catch (error: any) {
@@ -167,8 +180,10 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
       const { data: uploadData, error: uploadError } = await profiles.uploadPhoto(user.id, file);
       if (uploadError) throw new Error(uploadError);
 
-      if (uploadData?.profile_photo) {
-        setPhotoPreview(uploadData.profile_photo);
+      const newPhotoUrl = uploadData?.profile_photo;
+      if (newPhotoUrl) {
+        setPhotoPreview(newPhotoUrl);
+        updateUser({ profile_photo: newPhotoUrl });
       }
       toast.showSuccess('Success', 'Profile photo updated successfully!');
     } catch (error: any) {
@@ -215,6 +230,11 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
           <div className="w-10"></div>
         </div>
 
+        {isLoadingProfile ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          </div>
+        ) : (
         <div className="p-6">
           {/* Profile Photo */}
           <div className="text-center mb-8">
@@ -387,6 +407,7 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

@@ -73,10 +73,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (data.session?.user) setUser(mapProfile(data.session.user));
   };
 
+  const updateUser = (updates: Partial<import('../types/auth').User>) => {
+    setUser(prev => prev ? { ...prev, ...updates } : null);
+  };
+
   const isLoading = loading || minLoadingTime;
 
   return (
-    <AuthContext.Provider value={{ user, profile: user, loading: isLoading, signIn, signUp, signOut, refreshUser }}>
+    <AuthContext.Provider value={{ user, profile: user, loading: isLoading, signIn, signUp, signOut, refreshUser, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

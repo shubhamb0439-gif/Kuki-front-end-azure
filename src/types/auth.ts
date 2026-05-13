@@ -29,6 +29,7 @@ export interface AuthContextType {
   signUp: (email: string, password: string, name: string, role: 'employer' | 'employee') => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateUser: (updates: Partial<User>) => void;
 }
 
 export interface Employee {
