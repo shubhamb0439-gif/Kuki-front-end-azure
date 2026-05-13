@@ -387,6 +387,7 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
         employer_id: user?.id,
         amount: parseFloat(adjustmentAmount),
         currency: currentCurrency,
+        type: category,
         category: category,
         reason: adjustmentReason || undefined
       });
@@ -1054,7 +1055,7 @@ export function ManageEmployeesPage({ onReferFriend, onMessages }: ManageEmploye
                   </p>
 
                   <button
-                    onClick={() => { toast.showSuccess('Loan Granted', 'Loan granted successfully!'); closeModal(); }}
+                    onClick={() => { closeModal(); fetchEmployeeData(); }}
                     className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 px-4 rounded-lg font-medium transition-colors"
                   >
                     Close
