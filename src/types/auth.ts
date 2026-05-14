@@ -34,7 +34,8 @@ export interface AuthContextType {
 
 export interface Employee {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  employee_has_app?: boolean;
   employer_id: string;
   name: string;
   email?: string;

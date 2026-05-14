@@ -32,9 +32,10 @@ export function EmployeeProfileModal({ employee, onClose, onUpdate }: EmployeePr
   const { showSuccess, showError, showWarning } = useToast();
   const [actionType, setActionType] = useState<ActionType | null>(null);
 
-  // True only for employees who registered via the app (have a real user account).
-  // Robust against null, undefined, "", "null", "undefined" from backend.
-  const isLinkedEmployee = Boolean(
+  // True only for employees who registered via the app.
+  // Prefer the explicit employee_has_app flag; fall back to user_id presence.
+  const isLinkedEmployee = employee.employee_has_app === true || Boolean(
+    employee.employee_has_app !== false &&
     employee.user_id &&
     String(employee.user_id).trim() !== '' &&
     String(employee.user_id).trim() !== 'null' &&
