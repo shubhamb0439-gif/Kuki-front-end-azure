@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Eye, EyeOff, UserPlus, Building, User, Camera, Upload } from 'lucide-react';
-import { employees, profiles, attendance, wages, messages, admin } from '../../lib/api';
+import { profiles, auth } from '../../lib/api';
 import { detectCurrency } from '../../lib/currencyHelper';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -9,7 +9,7 @@ interface SignupPageProps {
 }
 
 export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
-  const { signUp } = useAuth();
+  const { signUp, updateUser } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -90,21 +90,22 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
     try {
       let authEmail = formData.email.trim() || `user_${formData.phone.replace(/[^0-9]/g, '')}@kuki.app`;
 
-      // Signup via API - creates user + profile in one call
+      // Step 1: register — token is stored in localStorage by auth.signUp
       await signUp(authEmail, formData.password, formData.name, formData.role as 'employer' | 'employee');
 
-      console.log('Signup successful');
+      // Step 2: get the newly created profile id from the session
+      if (photoFile) {
+        const { data: sessionData } = await auth.getSession();
+        const userId = sessionData?.session?.user?.id;
+        if (userId) {
+          const { data: uploadData } = await profiles.uploadPhoto(userId, photoFile);
+          if (uploadData?.profile_photo) {
+            updateUser({ profile_photo: uploadData.profile_photo });
+          }
+        }
+      }
 
-      // Photo upload handled separately after signup if needed
-      // Referral code processing can be added later via API
-
-      console.log('Account created successfully, profile created, user is authenticated');
-
-      // Show success message briefly, then let auth state change handle the redirect
       setShowSuccessModal(true);
-
-      // The onAuthStateChange listener in AuthContext will automatically
-      // detect the new session and fetch the profile, no need to reload
       setTimeout(() => {
         setLoading(false);
       }, 2000);

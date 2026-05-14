@@ -340,20 +340,12 @@ export function EmployeeProfileModal({ employee, onClose, onUpdate }: EmployeePr
         }
       } else {
         // Manually added employee: Grant loan directly without QR code
-        const grantDate = new Date().toISOString();
-
         const { error: loanError } = await wages.loans.create({
           employee_id: employee.id,
-          employer_id: user?.id,
           amount,
           interest_rate: rate,
-          total_amount: totalAmount,
-          remaining_amount: totalAmount,
-          monthly_deduction: deduction,
-          currency: employeeCurrency,
-          status: 'active',
-          loan_date: grantDate,
-          paid_amount: 0
+          tenure_months: deduction > 0 ? Math.ceil(totalAmount / deduction) : null,
+          currency: employeeCurrency
         });
 
         if (loanError) {
