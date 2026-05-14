@@ -144,17 +144,6 @@ export function ManualEmployeeAdd({ onClose, onSuccess }: ManualEmployeeAddProps
     setError('');
 
     try {
-      let photoUrl: string | null = null;
-
-      if (photoFile && user) {
-        const { data: uploadData, error: uploadError } = await profiles.uploadPhoto(user.id, photoFile);
-        if (uploadError) {
-          console.error('Photo upload error:', uploadError);
-        } else if (uploadData) {
-          photoUrl = uploadData.profile_photo;
-        }
-      }
-
       const employeeData: any = {
         employer_id: user.id,
         name: formData.name.trim(),
@@ -162,7 +151,6 @@ export function ManualEmployeeAdd({ onClose, onSuccess }: ManualEmployeeAddProps
         profession: formData.profession.trim(),
         status: 'active',
         employment_type: formData.employmentType,
-        photo_url: photoUrl,
         created_at: new Date().toISOString()
       };
 
@@ -174,6 +162,16 @@ export function ManualEmployeeAdd({ onClose, onSuccess }: ManualEmployeeAddProps
       const { data: employee, error: employeeError } = await employees.add(employeeData);
 
       if (employeeError) throw new Error(employeeError);
+
+      // Upload photo to the employee's own profile using their user_id
+      if (photoFile && employee?.user_id) {
+        const { data: uploadData, error: uploadError } = await profiles.uploadPhoto(employee.user_id, photoFile);
+        if (uploadError) {
+          console.error('Photo upload error:', uploadError);
+        } else if (uploadData?.profile_photo) {
+          await employees.update(employee.id, { photo_url: uploadData.profile_photo });
+        }
+      }
 
       onSuccess();
       onClose();
