@@ -148,8 +148,6 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
 
     if (!data) return;
 
-    console.log('[employees API raw FULL]', JSON.parse(JSON.stringify(data)));
-
     const formattedEmployees = data.map((emp: any) => ({
       id: emp.id,
       user_id: emp.user_id,

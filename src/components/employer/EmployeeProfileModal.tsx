@@ -32,10 +32,8 @@ export function EmployeeProfileModal({ employee, onClose, onUpdate }: EmployeePr
   const { showSuccess, showError, showWarning } = useToast();
   const [actionType, setActionType] = useState<ActionType | null>(null);
 
-  // employee_has_app is set by the backend based on whether the employee
-  // registered via the app (has a real auth account). Manually added employees
-  // will have employee_has_app === false or undefined.
-  const isLinkedEmployee = employee.employee_has_app === true;
+  // Backend returns 1 (app user) or 0 (manually added). Boolean() handles both.
+  const isLinkedEmployee = Boolean(employee.employee_has_app);
 
   const [currentWage, setCurrentWage] = useState<number | null>(null);
   const [wageInfo, setWageInfo] = useState<{
