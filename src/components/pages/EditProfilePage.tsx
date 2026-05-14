@@ -81,7 +81,7 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
       setIsLoadingProfile(false);
     };
     loadProfile();
-  }, [user]);
+  }, [user?.id]);
 
   const handleMessages = () => {
     window.location.hash = '#/messages';
@@ -161,27 +161,27 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
       return;
     }
 
+    // Show local preview immediately — don't wait for the backend URL
+    const reader = new FileReader();
+    reader.onloadend = () => setPhotoPreview(reader.result as string);
+    reader.readAsDataURL(file);
+
     setIsUploading(true);
     try {
       const { data: uploadResp, error: uploadError } = await profiles.uploadPhoto(user.id, file);
       if (uploadError) throw new Error(uploadError);
 
-      // Try every field name the backend might use for the photo URL
-      let photoUrl: string | undefined =
+      const photoUrl: string | undefined =
         uploadResp?.profile_photo ||
         uploadResp?.photo_url ||
         uploadResp?.url ||
         uploadResp?.data?.profile_photo;
 
-      // If the response didn't carry the URL, fetch the profile fresh
-      if (!photoUrl) {
-        const { data: fresh } = await profiles.get(user.id);
-        photoUrl = fresh?.profile_photo;
-      }
-
       if (photoUrl) {
-        setPhotoPreview(photoUrl);
         updateUser({ profile_photo: photoUrl });
+      } else {
+        const { data: fresh } = await profiles.get(user.id);
+        if (fresh?.profile_photo) updateUser({ profile_photo: fresh.profile_photo });
       }
       toast.showSuccess('Success', 'Profile photo updated successfully!');
     } catch (error: any) {
@@ -196,7 +196,7 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
       <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-emerald-400 rounded-full flex items-center justify-center">
         <span className="text-white font-semibold text-4xl">{name ? name.charAt(0).toUpperCase() : '?'}</span>
       </div>
-      {photo && photo.startsWith('http') && (
+      {photo && (photo.startsWith('http') || photo.startsWith('data:') || photo.startsWith('blob:')) && (
         <img
           src={photo}
           alt={name}

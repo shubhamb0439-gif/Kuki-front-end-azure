@@ -319,31 +319,24 @@ export function EmployeeProfileModal({ employee, onClose, onUpdate }: EmployeePr
 
       // Check if employee has a linked user account (QR-registered) or is manually added
       if (isLinkedEmployee) {
-        // QR-registered employee: Generate QR code for employee to scan
-        const qrCode = `qr:grant_loan:${user?.id}:${employee.id}:${Date.now()}`;
-
-        const { error } = await qrTransactions.create({
-          employer_id: user?.id,
+        // QR-registered employee: register in backend first, use returned id as QR content
+        const { data, error } = await qrTransactions.create({
+          transaction_type: 'loan',
           employee_id: employee.id,
-          transaction_type: 'grant_loan',
-          qr_code: qrCode,
+          amount,
           status: 'pending',
           metadata: {
-            amount,
             interest_rate: rate,
-            total_amount: totalAmount,
-            monthly_deduction: deduction,
-            currency: employeeCurrency,
-            employee_user_id: employee.user_id,
-            employee_name: employee.name
+            tenure_months: Math.ceil(totalAmount / deduction),
+            currency: employeeCurrency
           }
         });
 
-        if (!error) {
-          setQrCodeValue(qrCode);
+        if (!error && data?.id) {
+          setQrCodeValue(data.id);
           setShowQRCode(true);
         } else {
-          showError('QR Code Error', error);
+          showError('QR Code Error', error || 'Failed to register QR transaction');
         }
       } else {
         // Manually added employee: Grant loan directly without QR code

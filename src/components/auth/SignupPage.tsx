@@ -26,8 +26,6 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [detectedCurrency, setDetectedCurrency] = useState('USD');
   const [countryCode, setCountryCode] = useState('+1');
-  const [referralCode, setReferralCode] = useState<string | null>(null);
-  const [referrerName, setReferrerName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -40,35 +38,10 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
       setCountryCode(code);
     });
 
-    // Check for referral code in URL
-    const urlParams = new URLSearchParams(window.location.hash.split('?')[1]);
-    const refCode = urlParams.get('ref');
-    if (refCode) {
-      setReferralCode(refCode);
-      // Fetch referrer info
-      fetchReferrerInfo(refCode);
-    }
   }, []);
 
   const detectCountryCode = async (): Promise<string> => {
     return '+1';
-  };
-
-  const fetchReferrerInfo = async (code: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('account_links')
-        .select('primary_account_id, profiles!account_links_primary_account_id_fkey(name)')
-        .eq('referral_code', code)
-        .eq('status', 'pending')
-        .single();
-
-      if (!error && data) {
-        setReferrerName((data.profiles as any)?.name || 'Someone');
-      }
-    } catch (err) {
-      console.error('Error fetching referrer info:', err);
-    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -181,14 +154,6 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
 
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          {referrerName && (
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-              <p className="text-sm text-blue-800 text-center">
-                <span className="font-semibold">{referrerName}</span> invited you to join KUKI!
-              </p>
-            </div>
-          )}
-
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <UserPlus className="w-8 h-8 text-white" />

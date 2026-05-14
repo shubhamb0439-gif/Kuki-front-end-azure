@@ -86,32 +86,20 @@ export function ProfilePhotoUploadPage({ onComplete }: ProfilePhotoUploadPagePro
   };
 
   const handleSubmit = async () => {
-    if (!profilePhoto || !user) {
+    if (!photoFile || !user) {
       setError('Profile photo is required');
       return;
     }
 
     setLoading(true);
     try {
-      let photoUrl = profilePhoto;
-
-      if (photoFile) {
-        const { data: uploadData, error: uploadError } = await profiles.uploadPhoto(user.id, photoFile);
-        if (!uploadError && uploadData) {
-          photoUrl = uploadData.profile_photo;
-        }
-      }
+      const { data: uploadData, error: uploadError } = await profiles.uploadPhoto(user.id, photoFile);
+      if (uploadError || !uploadData) throw new Error(uploadError || 'Upload failed');
 
       const currency = await detectCurrency();
-
-      const { error: updateError } = await profiles.update(user.id, {
-        profile_photo: photoUrl,
-        currency: currency
-      });
-
+      const { error: updateError } = await profiles.update(user.id, { currency });
       if (updateError) throw new Error(updateError);
 
-      // Complete the process
       onComplete();
     } catch (err: any) {
       setError(err.message);
