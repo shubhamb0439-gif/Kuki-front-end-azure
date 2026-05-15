@@ -3,7 +3,7 @@ import { Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import LanguageSelector from '../common/LanguageSelector';
-import { employees, profiles, attendance, wages, messages, admin } from '../../lib/api';
+import { employees, profiles, attendance, wages, messages, admin, auth as authApi } from '../../lib/api';
 
 interface LoginPageProps {
   onSwitchToSignup: () => void;
@@ -18,6 +18,10 @@ export function LoginPage({ onSwitchToSignup, showSuccess = false, onMounted }: 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [displaySuccess, setDisplaySuccess] = useState(showSuccess);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState('');
   const { signIn } = useAuth();
   const { t } = useLanguage();
 
@@ -55,6 +59,15 @@ export function LoginPage({ onSwitchToSignup, showSuccess = false, onMounted }: 
       return 'The code is invalid or has expired. Please request a new one.';
     }
     return 'Something went wrong. Please try again.';
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) return;
+    setForgotLoading(true);
+    await authApi.forgotPassword(forgotEmail.trim());
+    setForgotLoading(false);
+    setForgotMessage('If an account exists for that email, a reset link has been sent.');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -150,6 +163,16 @@ export function LoginPage({ onSwitchToSignup, showSuccess = false, onMounted }: 
                 </div>
               </div>
 
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={() => { setShowForgot(true); setForgotMessage(''); setError(''); }}
+                  className="text-sm text-blue-500 hover:text-blue-700"
+                >
+                  Forgot password?
+                </button>
+              </div>
+
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                   <p className="text-red-600 text-sm">{error}</p>
@@ -168,6 +191,47 @@ export function LoginPage({ onSwitchToSignup, showSuccess = false, onMounted }: 
                 )}
               </button>
             </form>
+
+            {/* Forgot Password Modal */}
+            {showForgot && (
+              <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm">
+                  <h2 className="text-lg font-bold text-gray-900 mb-2">Reset Password</h2>
+                  <p className="text-sm text-gray-600 mb-4">Enter your email address and we'll send you a reset link.</p>
+                  {forgotMessage ? (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-4">
+                      <p className="text-emerald-700 text-sm">{forgotMessage}</p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleForgotPassword} className="space-y-4">
+                      <input
+                        type="email"
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="your@email.com"
+                        required
+                      />
+                      <button
+                        type="submit"
+                        disabled={forgotLoading}
+                        className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center"
+                      >
+                        {forgotLoading ? (
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : 'Send Reset Link'}
+                      </button>
+                    </form>
+                  )}
+                  <button
+                    onClick={() => { setShowForgot(false); setForgotEmail(''); setForgotMessage(''); }}
+                    className="w-full mt-3 text-gray-500 hover:text-gray-700 text-sm py-2"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
           <div className="mt-8 pt-6 border-t border-gray-200 text-center">
             <p className="text-gray-600 mb-4">{t('auth.noAccount')}</p>

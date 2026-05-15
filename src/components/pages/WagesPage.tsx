@@ -3,7 +3,7 @@ import { FileText, Download, Lock, Mail } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../../contexts/ToastContext';
-import { employees as employeesApi, profiles, attendance, wages, messages, admin } from '../../lib/api';
+import { employees as employeesApi, profiles, attendance, wages, messages, admin, emails } from '../../lib/api';
 import { Header } from '../common/Header';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { generatePDFContent, generateStatementSummary } from '../../lib/statementHelper';
@@ -258,6 +258,19 @@ export function WagesPage({ onReferFriend, onMessages }: WagesPageProps) {
         toast.showError('Error', insertError);
       } else {
         toast.showSuccess('Success', 'Statement generated successfully');
+
+        if (sendEmail && user?.email) {
+          const { error: emailError } = await emails.sendStatement(
+            user.email,
+            'Your KUKI Wage Statement',
+            statementMessage
+          );
+          if (emailError) {
+            toast.showWarning('Email Failed', 'Statement saved but email could not be sent.');
+          } else {
+            toast.showSuccess('Email Sent', `Statement emailed to ${user.email}`);
+          }
+        }
       }
     } catch (error: any) {
       console.error('Statement generation error:', error);

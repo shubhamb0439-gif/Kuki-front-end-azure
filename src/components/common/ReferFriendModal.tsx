@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Send, UserPlus, Mail } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { emails } from '../../lib/api';
 
 interface ReferFriendModalProps {
   onClose: () => void;
@@ -9,7 +10,7 @@ interface ReferFriendModalProps {
 
 export function ReferFriendModal({ onClose }: ReferFriendModalProps) {
   const { user } = useAuth();
-  const { showSuccess, showError, showInfo } = useToast();
+  const { showSuccess, showError } = useToast();
   const contactMethod = 'email';
   const [contactValue, setContactValue] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,99 +21,16 @@ export function ReferFriendModal({ onClose }: ReferFriendModalProps) {
 
     setLoading(true);
     try {
-      const appUrl = window.location.origin;
-      const appName = 'KUKI';
-      const description = `${user.name} has invited you to join ${appName}!\n\n${appName} is a comprehensive employee-employer management platform that helps businesses manage wages, attendance, performance reviews, and more.\n\nKey Features:\n- Seamless wage management and payment tracking\n- QR-based attendance and transaction systems\n- Performance ratings and reviews\n- Job postings and applications\n- Real-time messaging and notifications\n\nJoin ${appName} today and experience efficient workforce management!`;
+      const referralLink = `${window.location.origin}/#/signup?ref=${user.id}`;
 
-      if (contactMethod === 'email') {
-        // Call edge function to send email
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-referral`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            type: 'email',
-            to: contactValue,
-            from: user.name,
-            fromUserId: user.id,
-            appUrl,
-            description,
-            credentials: {
-              sendgridApiKey: import.meta.env.VITE_SENDGRID_API_KEY,
-              twilioFromEmail: import.meta.env.VITE_TWILIO_FROM_EMAIL
-            }
-          })
-        });
+      const { error } = await emails.sendReferral(contactValue, user.name, referralLink);
+      if (error) throw new Error(error);
 
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to send email');
-        }
-
-        const referralLink = result.referralLink || `${appUrl}#/signup?ref=${result.referralCode}`;
-
-        if (result.info) {
-          showInfo(
-            `Referral invitation prepared for ${contactValue}!`,
-            `${result.info}\n\nReferral Link: ${referralLink}`,
-            8000
-          );
-        } else {
-          showSuccess(
-            `Email sent successfully to ${contactValue}!`,
-            `A beautiful invitation email has been sent with your referral link. When they sign up using the link, they'll be automatically linked to your account!`,
-            8000
-          );
-        }
-      } else {
-        // Call edge function to send SMS
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-referral`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            type: 'sms',
-            to: contactValue,
-            from: user.name,
-            fromUserId: user.id,
-            appUrl,
-            description,
-            credentials: {
-              twilioAccountSid: import.meta.env.VITE_TWILIO_ACCOUNT_SID,
-              twilioAuthToken: import.meta.env.VITE_TWILIO_AUTH_TOKEN,
-              twilioPhoneNumber: import.meta.env.VITE_TWILIO_PHONE_NUMBER
-            }
-          })
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Failed to send SMS');
-        }
-
-        const referralLink = result.referralLink || `${appUrl}#/signup?ref=${result.referralCode}`;
-
-        if (result.info) {
-          showInfo(
-            `Referral invitation prepared for ${contactValue}!`,
-            `${result.info}\n\nReferral Link: ${referralLink}`,
-            8000
-          );
-        } else {
-          showSuccess(
-            `SMS sent successfully to ${contactValue}!`,
-            `A text message has been sent with your referral link. When they sign up using the link, they'll be automatically linked to your account!`,
-            8000
-          );
-        }
-      }
-
+      showSuccess(
+        `Invitation sent to ${contactValue}!`,
+        `They'll receive an email with your referral link to join KUKI.`,
+        6000
+      );
       onClose();
     } catch (error: any) {
       showError('Error sending referral', error.message);

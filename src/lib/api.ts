@@ -69,6 +69,12 @@ export const auth = {
     await request('POST', '/auth/logout');
     clearToken();
   },
+
+  forgotPassword: (email: string) =>
+    request<any>('POST', '/auth/forgot-password', { email }),
+
+  resetPassword: (token: string, new_password: string) =>
+    request<any>('POST', '/auth/reset-password', { token, new_password }),
 };
 
 // ─── PROFILES ─────────────────────────────────────────────────────────────────
@@ -159,6 +165,14 @@ export const qrTransactions = {
   get: (qr_code: string) => request<any>('GET', `/qr-transactions?qr_code=${encodeURIComponent(qr_code)}`),
   update: (id: string, updates: Record<string, any>) => request<any>('PATCH', `/qr-transactions/${id}`, updates),
   process: (data: { qr_code: string }) => request<any>('POST', '/qr-transactions/process', data),
+};
+
+// ─── EMAILS ───────────────────────────────────────────────────────────────────
+export const emails = {
+  sendStatement: (to_email: string, subject: string, statement_content: string) =>
+    request<any>('POST', '/emails/statement', { to_email, subject, statement_content }),
+  sendReferral: (to_email: string, from_name: string, referral_link: string) =>
+    request<any>('POST', '/emails/referral', { to_email, from_name, referral_link }),
 };
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────

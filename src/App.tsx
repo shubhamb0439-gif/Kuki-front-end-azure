@@ -6,6 +6,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { LoginPage } from './components/auth/LoginPage';
 import { SignupPage } from './components/auth/SignupPage';
+import { ResetPasswordPage } from './components/auth/ResetPasswordPage';
 import { EmployerHome } from './components/employer/EmployerHome';
 import { EmployeeHome } from './components/employee/EmployeeHome';
 import { BottomNavigation } from './components/navigation/BottomNavigation';
@@ -152,6 +153,21 @@ function AppContent() {
 
   // Mobile mode - Full functionality
   if (!user) {
+    // Handle reset-password link before showing login/signup
+    const hashPath = window.location.hash.replace('#/', '').split('?')[0];
+    const resetToken = new URLSearchParams(window.location.hash.split('?')[1] || '').get('token');
+    if (hashPath === 'reset-password' && resetToken) {
+      return (
+        <ResetPasswordPage
+          token={resetToken}
+          onDone={() => {
+            window.location.hash = '';
+            setAuthMode('login');
+          }}
+        />
+      );
+    }
+
     return (
       <div className="min-h-screen relative">
         {authMode === 'login' ? (
