@@ -55,8 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (data?.user) setUser(mapProfile(data.user));
   };
 
-  const signUp = async (email: string, password: string, name: string, role: 'employer' | 'employee') => {
-    const { data, error } = await auth.signUp(email, password, name, role);
+  const signUp = async (email: string, password: string, name: string, role: 'employer' | 'employee', phone?: string) => {
+    const { data, error } = await auth.signUp(email, password, name, role, phone);
     if (error) throw new Error(error);
     if (data?.user) setUser(mapProfile(data.user));
   };

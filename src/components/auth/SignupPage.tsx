@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Eye, EyeOff, UserPlus, Building, User, Camera, Upload } from 'lucide-react';
 import { profiles, auth } from '../../lib/api';
-import { detectCurrency } from '../../lib/currencyHelper';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface SignupPageProps {
@@ -24,15 +23,10 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [detectedCurrency, setDetectedCurrency] = useState('USD');
   const [countryCode, setCountryCode] = useState('+1');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    detectCurrency().then(currency => {
-      setDetectedCurrency(currency);
-    });
-
     // Detect country code based on location
     detectCountryCode().then(code => {
       setCountryCode(code);
@@ -92,7 +86,8 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
       let authEmail = formData.email.trim() || `user_${formData.phone.replace(/[^0-9]/g, '')}@kuki.app`;
 
       // Step 1: register — token is stored in localStorage by auth.signUp
-      await signUp(authEmail, formData.password, formData.name, formData.role as 'employer' | 'employee');
+      const phone = formData.phone.trim() || undefined;
+      await signUp(authEmail, formData.password, formData.name, formData.role as 'employer' | 'employee', phone);
 
       // Step 2: get the newly created profile id from the session
       if (photoFile) {

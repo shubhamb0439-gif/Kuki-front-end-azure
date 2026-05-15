@@ -26,7 +26,7 @@ export interface AuthContextType {
   profile: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, name: string, role: 'employer' | 'employee') => Promise<void>;
+  signUp: (email: string, password: string, name: string, role: 'employer' | 'employee', phone?: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;

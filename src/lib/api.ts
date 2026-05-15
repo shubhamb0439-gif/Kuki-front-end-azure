@@ -45,8 +45,8 @@ async function request<T>(
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 export const auth = {
-  async signUp(email: string, password: string, name: string, role: 'employer' | 'employee') {
-    const { data, error } = await request<{ token: string; user: any }>('POST', '/auth/signup', { email, password, name, role });
+  async signUp(email: string, password: string, name: string, role: 'employer' | 'employee', phone?: string) {
+    const { data, error } = await request<{ token: string; user: any }>('POST', '/auth/signup', { email, password, name, role, phone: phone || null });
     if (data?.token) setToken(data.token);
     return { data, error };
   },
