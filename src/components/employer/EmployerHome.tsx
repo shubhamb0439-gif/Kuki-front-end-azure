@@ -16,7 +16,7 @@ import { getEmployerOwnStatus, getBatchEmployeeStatusForEmployer } from '../../l
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import { EmployerHomeSkeletonLoader } from '../common/SkeletonLoader';
 import { SubscriptionModal } from '../common/SubscriptionModal';
-import { canAddMoreEmployees, getPlanDisplayName, getTierDisplayName, getPlanBadgeColor, canUseContractEmployment } from '../../lib/subscriptionHelper';
+import { canAddMoreEmployees, getPlanDisplayName, getTierDisplayName, getPlanBadgeColor, canUseContractEmployment, getSubscriptionFeatures } from '../../lib/subscriptionHelper';
 import { Modal } from '../common/Modal';
 
 interface EmployerHomeProps {
@@ -235,7 +235,8 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
   };
 
   const handleAddEmployeeClick = () => {
-    const maxEmployees = user?.max_employees || 1;
+    const plan = user?.subscription_plan || 'free';
+    const maxEmployees = getSubscriptionFeatures(plan).maxEmployees;
     const canAdd = canAddMoreEmployees(employees.length, maxEmployees);
 
     if (!canAdd) {
@@ -445,7 +446,7 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
                   {getPlanDisplayName(user?.subscription_plan || 'free')} Account
                 </span>
                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border border-white/30 bg-white/10 text-white backdrop-blur-sm`}>
-                  {employees.length}/{user?.max_employees || 1} Employees
+                  {employees.length}/{getSubscriptionFeatures(user?.subscription_plan || 'free').maxEmployees} Employees
                 </span>
               </div>
 
@@ -979,7 +980,7 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
 
           <div className="mb-6">
             <p className="text-gray-700 mb-4">
-              You've reached the maximum number of employees ({user?.max_employees || 2}) for your current plan.
+              You've reached the maximum number of employees ({getSubscriptionFeatures(user?.subscription_plan || 'free').maxEmployees}) for your current plan.
             </p>
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
               <h3 className="font-semibold text-blue-900 mb-2">Upgrade to add more employees:</h3>
