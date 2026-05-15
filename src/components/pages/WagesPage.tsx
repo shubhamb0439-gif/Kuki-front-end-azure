@@ -642,7 +642,7 @@ export function WagesPage({ onReferFriend, onMessages }: WagesPageProps) {
               </div>
             </div>
 
-            {statementAccess.allowedMonths === 'current_and_last' && (
+            {user?.role !== 'employee' && statementAccess.allowedMonths === 'current_and_last' && (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-2">
                 <Lock className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-yellow-800">
@@ -651,7 +651,7 @@ export function WagesPage({ onReferFriend, onMessages }: WagesPageProps) {
               </div>
             )}
 
-            {statementAccess.allowedMonths === 'current_year' && (
+            {user?.role !== 'employee' && statementAccess.allowedMonths === 'current_year' && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
                 <Lock className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-blue-800">

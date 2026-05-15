@@ -136,7 +136,11 @@ export function MessagesPage({ onReferFriend, onMessages }: MessagesPageProps) {
       }
 
       if (data) {
-        setStatements(data);
+        const clearedAt = localStorage.getItem(`kuki_cleared_${user.id}`);
+        const filtered = clearedAt
+          ? data.filter((s: any) => new Date(s.created_at) > new Date(clearedAt))
+          : data;
+        setStatements(filtered);
       }
     } catch (error) {
       console.error('Error in loadStatements:', error);
@@ -150,6 +154,7 @@ export function MessagesPage({ onReferFriend, onMessages }: MessagesPageProps) {
       onConfirm: async () => {
         setConfirmAction(null);
         try {
+          localStorage.setItem(`kuki_cleared_${user.id}`, new Date().toISOString());
           setStatements([]);
           setApplications([]);
           toast.showSuccess('Success', 'All messages cleared successfully!');

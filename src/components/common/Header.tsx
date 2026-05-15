@@ -118,7 +118,7 @@ export function Header({ onReferFriend, onMessages, unreadCount = 0, onUpgradePl
           />
           <div className="absolute right-4 top-[70px] bg-white rounded-2xl shadow-2xl overflow-hidden z-50 w-64 animate-slideDown">
             <div className="py-2">
-              {onUpgradePlan && !hideUpgradeAndLinked && (
+              {onUpgradePlan && !hideUpgradeAndLinked && user?.role !== 'employee' && (
                 <button
                   onClick={handleUpgradePlanClick}
                   className="w-full px-6 py-3 flex items-center gap-3 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition-colors text-left border-b border-gray-100"
@@ -131,7 +131,7 @@ export function Header({ onReferFriend, onMessages, unreadCount = 0, onUpgradePl
                 </button>
               )}
 
-              {!hideUpgradeAndLinked && (
+              {!hideUpgradeAndLinked && user?.role !== 'employee' && (
                 <button
                   onClick={handleLinkedAccountsClick}
                   className="w-full px-6 py-3 flex items-center gap-3 hover:bg-blue-50 transition-colors text-left"
