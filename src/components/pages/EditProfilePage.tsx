@@ -71,10 +71,10 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
       setIsLoadingProfile(true);
       const { data } = await profiles.get(user.id);
       // Always apply from API; fall back to auth state field-by-field
-      setName(data?.name ?? user.name ?? '');
-      setPhone(data?.phone ?? user.phone ?? '');
-      setEmail(data?.email ?? user.email ?? '');
-      setProfession(data?.profession ?? user.profession ?? '');
+      setName(data?.name || user.name || '');
+      setPhone(data?.phone || user.phone || '');
+      setEmail(data?.email || user.email || '');
+      setProfession((data?.profession || user.profession || '').toLowerCase());
       setCurrency(data?.currency ?? 'USD');
       setPhotoPreview(data?.profile_photo ?? user.profile_photo ?? undefined);
       setCanEditEmail(!(data?.email ?? user.email));

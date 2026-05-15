@@ -203,8 +203,9 @@ function AppContent() {
     );
   }
 
-  // Check if user needs to upload profile photo (skip for admin)
-  if (!user.profile_photo && user.role !== 'admin') {
+  // Check if user needs to upload profile photo (skip for admin and mid-signup flow)
+  const isCompletingSignup = sessionStorage.getItem('completing_signup') === 'true';
+  if (!user.profile_photo && user.role !== 'admin' && !isCompletingSignup) {
     return <ProfilePhotoUploadPage onComplete={() => window.location.reload()} />;
   }
 

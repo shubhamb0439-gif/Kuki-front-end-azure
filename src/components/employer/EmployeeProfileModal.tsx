@@ -585,7 +585,8 @@ export function EmployeeProfileModal({ employee, onClose, onUpdate }: EmployeePr
                 <ProfilePhoto name={employee.name} photo={employee.profile_photo} />
               </div>
               <h4 className="text-lg font-bold text-gray-900">{employee.name}</h4>
-              <p className="text-xs text-gray-600">{employee.email || employee.phone}</p>
+              {employee.email && <p className="text-xs text-gray-600">{employee.email}</p>}
+              {employee.phone && <p className="text-xs text-gray-600">{employee.phone}</p>}
               {employee.profession && (
                 <p className="text-xs text-gray-500">{employee.profession}</p>
               )}

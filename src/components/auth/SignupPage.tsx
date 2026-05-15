@@ -86,6 +86,7 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
     }
 
     setLoading(true);
+    sessionStorage.setItem('completing_signup', 'true');
 
     try {
       let authEmail = formData.email.trim() || `user_${formData.phone.replace(/[^0-9]/g, '')}@kuki.app`;
@@ -105,6 +106,7 @@ export function SignupPage({ onSwitchToLogin }: SignupPageProps) {
         }
       }
 
+      sessionStorage.removeItem('completing_signup');
       setShowSuccessModal(true);
       setTimeout(() => {
         setLoading(false);
