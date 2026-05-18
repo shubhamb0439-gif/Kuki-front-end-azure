@@ -105,6 +105,13 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
     return () => {};
   };
 
+  // Poll employee list every 3s while the add-employee QR code is shown
+  useEffect(() => {
+    if (!showQRCode || qrTransactionType !== 'add_employee') return;
+    const interval = setInterval(fetchEmployees, 3000);
+    return () => clearInterval(interval);
+  }, [showQRCode, qrTransactionType]);
+
   // Memoize employee user IDs to prevent re-computing on every render
   const employeeUserIds = useMemo(() => {
     return employees

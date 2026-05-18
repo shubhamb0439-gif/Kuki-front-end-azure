@@ -71,6 +71,13 @@ export function EmployeeProfileModal({ employee, onClose, onUpdate }: EmployeePr
     fetchPerformanceRating();
   }, [employee.id]);
 
+  // Poll loan data every 3s while showing loan QR so it refreshes when employee scans
+  useEffect(() => {
+    if (!showQRCode || actionType !== 'loan') return;
+    const interval = setInterval(fetchEmployeeData, 3000);
+    return () => clearInterval(interval);
+  }, [showQRCode, actionType]);
+
   const fetchPerformanceRating = async () => {
     if (!isLinkedEmployee || !employee.user_id) return;
     const { data: ratings } = await admin.ratings.listByEmployee(employee.user_id);

@@ -95,11 +95,12 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
   }, [user]);
 
   useEffect(() => {
-    if (searchQuery.length > 0) {
-      searchPeople();
-    } else {
+    if (searchQuery.length === 0) {
       setSearchResults([]);
+      return;
     }
+    const timer = setTimeout(() => searchPeople(), 300);
+    return () => clearTimeout(timer);
   }, [searchQuery]);
 
   const loadFriendRequests = async () => {
@@ -142,57 +143,22 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
   const searchPeople = async () => {
     if (!user || searchQuery.length === 0) return;
 
-    let query = supabase
-      .from('profiles')
-      .select('id, name, email, role, profile_photo, profession')
-      .neq('id', user.id)
-      .limit(20);
+    const { data, error } = await profiles.list();
+    if (error || !data) return;
 
-    // Search by name OR profession
-    // For employers searching, they want to find employees by profession
+    const q = searchQuery.toLowerCase();
+    let filtered = (data as Profile[]).filter((p: Profile) => p.id !== user.id);
+
     if (user.role === 'employer') {
-      query = query.or(`name.ilike.%${searchQuery}%,profession.ilike.%${searchQuery}%`);
-    } else {
-      query = query.ilike('name', `%${searchQuery}%`);
-    }
-
-    const { data, error } = await query;
-
-    if (!error && data) {
-      const profilesWithRatings = await Promise.all(
-        data.map(async (profile) => {
-          const { data: ratings } = await supabase
-            .from('performance_ratings')
-            .select('rating')
-            .eq('employee_id', profile.id);
-
-          if (ratings && ratings.length > 0) {
-            const avgRating = ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length;
-            return {
-              ...profile,
-              average_rating: Math.round(avgRating * 10) / 10,
-              rating_count: ratings.length
-            };
-          }
-
-          return {
-            ...profile,
-            average_rating: 0,
-            rating_count: 0
-          };
-        })
+      filtered = filtered.filter((p: Profile) =>
+        p.name?.toLowerCase().includes(q) || p.profession?.toLowerCase().includes(q)
       );
-
-      // Sort by rating (highest first), then by name
-      profilesWithRatings.sort((a, b) => {
-        if (b.average_rating !== a.average_rating) {
-          return b.average_rating! - a.average_rating!;
-        }
-        return a.name.localeCompare(b.name);
-      });
-
-      setSearchResults(profilesWithRatings);
+    } else {
+      filtered = filtered.filter((p: Profile) => p.name?.toLowerCase().includes(q));
     }
+
+    filtered.sort((a, b) => a.name?.localeCompare(b.name ?? '') ?? 0);
+    setSearchResults(filtered.slice(0, 20));
   };
 
   const sendFriendRequest = async (receiverId: string) => {
