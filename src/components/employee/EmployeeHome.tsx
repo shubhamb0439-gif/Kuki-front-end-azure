@@ -94,8 +94,12 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
 
   const fetchUnreadMessages = async () => {
     if (!user) return;
-    const { data } = await messages.list();
-    const unread = (data || []).filter((m: any) => !m.is_read);
+    const { data } = await wages.statements.list({ user_id: user.id });
+    const clearedAt = localStorage.getItem(`kuki_cleared_${user.id}`);
+    const unread = (data || []).filter((m: any) => {
+      if (clearedAt && new Date(m.created_at) <= new Date(clearedAt)) return false;
+      return !m.read;
+    });
     setUnreadMessages(unread.length);
   };
 
