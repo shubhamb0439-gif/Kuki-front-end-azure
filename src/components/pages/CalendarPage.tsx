@@ -37,6 +37,9 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
   const currentTransactionIdRef = useRef<string | null>(null);
   const [selectedDateSummary, setSelectedDateSummary] = useState<AttendanceRecord & { employee_name?: string } | null>(null);
   const [allEmployeeDateSummary, setAllEmployeeDateSummary] = useState<{ date: string; records: any[] } | null>(null);
+  const [showLeaveActionModal, setShowLeaveActionModal] = useState(false);
+  const [pendingActionDate, setPendingActionDate] = useState<Date | null>(null);
+  const [markingLeave, setMarkingLeave] = useState(false);
   const [showStatementModal, setShowStatementModal] = useState(false);
   const [startMonth, setStartMonth] = useState(new Date().getMonth() + 1);
   const [startYear, setStartYear] = useState(new Date().getFullYear());
@@ -180,13 +183,37 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
     if (user?.role === 'employee') {
       setSelectedDate(date);
       setShowLeaveModal(true);
-    } else if (user?.role === 'employer' && status === 'absent') {
+    } else if (user?.role === 'employer' && (status === 'absent' || status === null)) {
       if (!selectedEmployeeId) {
-        toast.showWarning('No Employee Selected', 'Please select an employee first to generate attendance QR for missed dates');
+        toast.showWarning('No Employee Selected', 'Please select an employee first to mark leave or generate attendance QR');
         return;
       }
       setSelectedDate(date);
-      generateAttendanceQR(date);
+      setPendingActionDate(date);
+      setShowLeaveActionModal(true);
+    }
+  };
+
+  const handleMarkLeave = async (type: 'leave' | 'sick_leave') => {
+    if (!pendingActionDate || !user || !selectedEmployeeId) return;
+    setMarkingLeave(true);
+    try {
+      const d = pendingActionDate;
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const { error } = await attendance.manualEntry({
+        employee_id: selectedEmployeeId,
+        attendance_date: dateStr,
+        status: type
+      });
+      if (error) throw new Error(error);
+      toast.showSuccess('Success', `${type === 'leave' ? 'Casual Leave' : 'Sick Leave'} marked successfully`);
+      setShowLeaveActionModal(false);
+      setPendingActionDate(null);
+      fetchAttendance();
+    } catch (err: any) {
+      toast.showError('Error', err.message);
+    } finally {
+      setMarkingLeave(false);
     }
   };
 
@@ -535,7 +562,7 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
                     className={`aspect-square text-sm rounded-lg transition-colors ${
                       date
                         ? `${colorClass} font-medium ${
-                            (user?.role === 'employer' && status === 'absent' && selectedEmployeeId)
+                            (user?.role === 'employer' && (status === 'absent' || status === null) && selectedEmployeeId)
                               ? 'cursor-pointer hover:opacity-80 ring-2 ring-blue-400'
                               : 'cursor-default'
                           }`
@@ -687,8 +714,8 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
                 <p className="text-sm text-emerald-900">
                   <QrCode className="w-4 h-4 inline mr-2" />
                   {selectedEmployeeId
-                    ? 'Click on absent (red) dates to generate QR code for missed attendance'
-                    : 'Select an employee to generate QR codes for missed attendance dates'}
+                    ? 'Click any unmarked date to mark leave, sick leave, or generate attendance QR'
+                    : 'Select an employee to mark leave or generate attendance QR codes'}
                 </p>
               </div>
 
@@ -769,6 +796,64 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
                     className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-3 px-4 rounded-lg font-medium transition-colors"
                   >
                     Submit
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showLeaveActionModal && pendingActionDate && user?.role === 'employer' && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900">Mark Date</h3>
+                  <button onClick={() => { setShowLeaveActionModal(false); setPendingActionDate(null); }}>
+                    <X className="w-5 h-5 text-gray-500" />
+                  </button>
+                </div>
+                <p className="text-sm text-gray-500 mb-5 text-center">
+                  {pendingActionDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                </p>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => { setShowLeaveActionModal(false); generateAttendanceQR(pendingActionDate); }}
+                    className="w-full flex items-center gap-3 p-4 border-2 border-blue-200 hover:border-blue-400 rounded-xl transition-colors text-left"
+                  >
+                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <QrCode className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">Generate QR</p>
+                      <p className="text-xs text-gray-500">Employee scans to mark attendance</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => handleMarkLeave('leave')}
+                    disabled={markingLeave}
+                    className="w-full flex items-center gap-3 p-4 border-2 border-orange-200 hover:border-orange-400 rounded-xl transition-colors text-left disabled:opacity-50"
+                  >
+                    <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Calendar className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">Mark Casual Leave</p>
+                      <p className="text-xs text-gray-500">Record this day as casual leave</p>
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => handleMarkLeave('sick_leave')}
+                    disabled={markingLeave}
+                    className="w-full flex items-center gap-3 p-4 border-2 border-indigo-200 hover:border-indigo-400 rounded-xl transition-colors text-left disabled:opacity-50"
+                  >
+                    <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <CheckCircle className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">Mark Sick Leave</p>
+                      <p className="text-xs text-gray-500">Record this day as sick leave</p>
+                    </div>
                   </button>
                 </div>
               </div>
