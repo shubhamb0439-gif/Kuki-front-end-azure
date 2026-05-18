@@ -244,8 +244,6 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
       return;
     }
 
-    const plan = user?.subscription_plan || 'free';
-
     // FREE and CORE plans go directly to manual entry
     // PRO and PRO PLUS get options modal (Manual or QR Scan)
     if (plan === 'free' || plan === 'core') {
