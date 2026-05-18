@@ -99,10 +99,12 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
     if (!user) return;
     const { data } = await employeesApi.list();
     if (data) {
-      const normalized = data.map((emp: any) => ({
-        ...emp,
-        display_name: emp.name || emp.email || 'Unknown Employee'
-      }));
+      const normalized = data
+        .filter((emp: any) => emp.employee_has_app)
+        .map((emp: any) => ({
+          ...emp,
+          display_name: emp.name || emp.email || 'Unknown Employee'
+        }));
       setEmployees(normalized);
     }
   };
