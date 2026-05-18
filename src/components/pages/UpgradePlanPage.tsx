@@ -3,14 +3,16 @@ import { X, CreditCard, Zap, Check, ArrowLeft } from 'lucide-react';
 import { employees, profiles, attendance, wages, messages, admin } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { formatPlanPrice } from '../../lib/currencyHelper';
 
 interface UpgradePlanPageProps {
   selectedPlan: 'core' | 'pro' | 'pro_plus';
   trialUsed?: boolean;
+  detectedCurrency?: string;
   onClose: () => void;
 }
 
-export function UpgradePlanPage({ selectedPlan, trialUsed = false, onClose }: UpgradePlanPageProps) {
+export function UpgradePlanPage({ selectedPlan, trialUsed = false, detectedCurrency = 'USD', onClose }: UpgradePlanPageProps) {
   const { user } = useAuth();
   const { t } = useLanguage();
   const [showPaymentForm, setShowPaymentForm] = useState(false);
@@ -224,9 +226,12 @@ export function UpgradePlanPage({ selectedPlan, trialUsed = false, onClose }: Up
         <div className="p-6 space-y-6">
           <div className="text-center">
             <div className="inline-flex items-baseline gap-1">
-              <span className="text-5xl font-bold text-gray-900">${plan.price}</span>
+              <span className="text-5xl font-bold text-gray-900">{formatPlanPrice(plan.price, detectedCurrency)}</span>
               <span className="text-gray-600">/month</span>
             </div>
+            {detectedCurrency !== 'USD' && (
+              <p className="text-xs text-gray-400 mt-0.5">≈ ${plan.price.toFixed(2)} USD</p>
+            )}
             {!trialUsed && (
               <p className="mt-2 text-green-600 font-semibold">14 days free trial</p>
             )}

@@ -181,6 +181,7 @@ export function SubscriptionModal({ onClose, onSelectPlan }: SubscriptionModalPr
       <UpgradePlanPage
         selectedPlan={selectedPlanForUpgrade}
         trialUsed={trialUsed}
+        detectedCurrency={detectedCurrency}
         onClose={() => {
           setSelectedPlanForUpgrade(null);
           onClose();
