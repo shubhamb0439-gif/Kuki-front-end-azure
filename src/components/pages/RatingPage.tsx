@@ -63,15 +63,17 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
     if (!user) return;
     const { data, error } = await employees.list();
     if (!error && data) {
-      const formatted = (data as any[]).map((emp: any) => ({
-        id: emp.id,
-        user_id: emp.user_id,
-        name: emp.name || emp.email,
-        email: emp.email,
-        profile_photo: emp.photo_url || emp.profile_photo,
-        isManualEmployee: !emp.user_id,
-        employeeRecordId: emp.id,
-      }));
+      const formatted = (data as any[])
+        .filter((emp: any) => emp.user_id !== user.id) // never let employer rate themselves
+        .map((emp: any) => ({
+          id: emp.id,
+          user_id: emp.user_id,
+          name: emp.name || emp.email,
+          email: emp.email,
+          profile_photo: emp.photo_url || emp.profile_photo,
+          isManualEmployee: !emp.user_id,
+          employeeRecordId: emp.id,
+        }));
       setEmployeeList(formatted);
     }
   };
@@ -135,6 +137,11 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
       return;
     }
 
+    if (selectedEmployee.user_id === user?.id) {
+      toast.showWarning('Invalid Selection', 'You cannot rate yourself');
+      return;
+    }
+
     if (isFutureDate(selectedDate)) {
       toast.showWarning('Invalid Date', 'You cannot submit a rating for a future date');
       return;
@@ -154,10 +161,11 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
 
       if (ratingError) throw new Error(ratingError);
 
+      // Statement goes to the employee — their employer has rated them
       if (selectedEmployee.user_id) {
         await wages.statements.create({
           user_id: selectedEmployee.user_id,
-          message: `PERFORMANCE RATING RECEIVED\n\nFrom: ${user?.name}\nDate: ${ratingDate}\nRating: ${rating} stars${comment.trim() ? `\n\nComment:\n${comment}` : ''}\n\n- Performance Review System`,
+          message: `PERFORMANCE RATING RECEIVED\n\nYour employer ${user?.name} has given you a ${rating} star rating.\nDate: ${ratingDate}${comment.trim() ? `\n\nComment:\n${comment}` : ''}\n\n- Performance Review System`,
         });
       }
 
@@ -193,12 +201,11 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
 
       if (ratingError) throw new Error(ratingError);
 
-      if (employerComment.trim()) {
-        await wages.statements.create({
-          user_id: selectedEmployer.id,
-          message: `EMPLOYER RATING RECEIVED\n\nFrom: ${user?.name}\nRating: ${employerRating} stars\n\nComment:\n${employerComment}\n\n- Rating System`,
-        });
-      }
+      // Statement goes to the employer — their employee has rated them
+      await wages.statements.create({
+        user_id: selectedEmployer.id,
+        message: `EMPLOYER RATING RECEIVED\n\nYour employee ${user?.name} has given you a ${employerRating} star rating.${employerComment.trim() ? `\n\nComment:\n${employerComment}` : ''}\n\n- Rating System`,
+      });
 
       setShowEmployerRatingModal(false);
       setSelectedEmployer(null);

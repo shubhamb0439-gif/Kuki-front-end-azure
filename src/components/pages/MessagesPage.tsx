@@ -137,9 +137,11 @@ export function MessagesPage({ onReferFriend, onMessages }: MessagesPageProps) {
 
       if (data) {
         const clearedAt = localStorage.getItem(`kuki_cleared_${user.id}`);
+        // Filter to only this user's statements (backend may return all)
+        const mine = data.filter((s: any) => !s.user_id || s.user_id === user.id);
         const filtered = clearedAt
-          ? data.filter((s: any) => new Date(s.created_at) > new Date(clearedAt))
-          : data;
+          ? mine.filter((s: any) => new Date(s.created_at) > new Date(clearedAt))
+          : mine;
         setStatements(filtered);
       }
     } catch (error) {

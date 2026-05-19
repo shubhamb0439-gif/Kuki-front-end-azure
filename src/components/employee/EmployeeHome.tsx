@@ -101,6 +101,7 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
     const { data } = await wages.statements.list({ user_id: user.id });
     const clearedAt = localStorage.getItem(`kuki_cleared_${user.id}`);
     const unread = (data || []).filter((m: any) => {
+      if (m.user_id && m.user_id !== user.id) return false; // skip other users' statements
       if (clearedAt && new Date(m.created_at) <= new Date(clearedAt)) return false;
       return !m.read;
     });

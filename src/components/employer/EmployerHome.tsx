@@ -134,6 +134,7 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
     const { data } = await wages.statements.list({ user_id: user.id });
     const clearedAt = localStorage.getItem(`kuki_cleared_${user.id}`);
     const unread = (data || []).filter((m: any) => {
+      if (m.user_id && m.user_id !== user.id) return false; // skip other users' statements
       if (clearedAt && new Date(m.created_at) <= new Date(clearedAt)) return false;
       return !m.read;
     });
@@ -208,16 +209,13 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
     const status = await getEmployerOwnStatus(user.id);
     setEmployerStatus(status);
 
-    const { data: ratings } = await admin.ratings.listByEmployer(user.id);
+    // listByEmployee(employer.id) returns ratings where employee_id = employer.id
+    // Employee-to-employer ratings are stored with employee_id = employer.id (our encoding)
+    // so this correctly returns ONLY ratings the employer received from employees
+    const { data: ratings } = await admin.ratings.listByEmployee(user.id);
     if (ratings && ratings.length > 0) {
-      // Only count ratings employees gave TO the employer (employee_id === employer_id marks employee-to-employer)
-      const received = ratings.filter((r: any) => r.employee_id === r.employer_id);
-      if (received.length > 0) {
-        const avgRating = received.reduce((sum: number, r: any) => sum + r.rating, 0) / received.length;
-        setEmployerRating(Math.round(avgRating));
-      } else {
-        setEmployerRating(5);
-      }
+      const avgRating = ratings.reduce((sum: number, r: any) => sum + r.rating, 0) / ratings.length;
+      setEmployerRating(Math.round(avgRating));
     } else {
       setEmployerRating(5);
     }
