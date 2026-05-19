@@ -5,6 +5,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { profiles } from '../../lib/api';
+import { detectCurrency } from '../../lib/currencyHelper';
 import { Header } from '../common/Header';
 import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import LanguageSelector from '../common/LanguageSelector';
@@ -80,7 +81,11 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
       setPhone(data?.phone || user.phone || '');
       setEmail(data?.email || user.email || '');
       setProfession((data?.profession || user.profession || '').toLowerCase());
-      setCurrency(data?.currency ?? 'USD');
+      if (data?.currency) {
+        setCurrency(data.currency);
+      } else {
+        detectCurrency().then(setCurrency);
+      }
       setPhotoPreview(data?.profile_photo ?? user.profile_photo ?? undefined);
       setCanEditEmail(!(data?.email ?? user.email));
       setIsLoadingProfile(false);

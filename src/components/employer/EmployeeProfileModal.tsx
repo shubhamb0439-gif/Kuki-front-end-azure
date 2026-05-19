@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, DollarSign, CreditCard, Gift, Trash2, XCircle, Star } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { employees, profiles, wages, admin, qrTransactions } from '../../lib/api';
+import { detectCurrency } from '../../lib/currencyHelper';
 import { Employee } from '../../types/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -89,11 +90,15 @@ export function EmployeeProfileModal({ employee, onClose, onUpdate }: EmployeePr
   };
 
   const fetchEmployeeData = async () => {
-    // Fetch currency from employee's profile, or fall back to employer's
+    // Fetch currency from employee's profile, fall back to employer's, then auto-detect
     const profileId = employee.user_id || employee.employer_id;
     if (profileId) {
       const { data: profileData } = await profiles.get(profileId);
-      if (profileData?.currency) setEmployeeCurrency(profileData.currency);
+      if (profileData?.currency) {
+        setEmployeeCurrency(profileData.currency);
+      } else {
+        detectCurrency().then(setEmployeeCurrency);
+      }
     }
 
     // Fetch wage record

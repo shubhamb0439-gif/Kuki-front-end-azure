@@ -210,8 +210,14 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
 
     const { data: ratings } = await admin.ratings.listByEmployer(user.id);
     if (ratings && ratings.length > 0) {
-      const avgRating = ratings.reduce((sum: number, r: any) => sum + r.rating, 0) / ratings.length;
-      setEmployerRating(Math.round(avgRating));
+      // Only count ratings employees gave TO the employer (employee_id === employer_id marks employee-to-employer)
+      const received = ratings.filter((r: any) => r.employee_id === r.employer_id);
+      if (received.length > 0) {
+        const avgRating = received.reduce((sum: number, r: any) => sum + r.rating, 0) / received.length;
+        setEmployerRating(Math.round(avgRating));
+      } else {
+        setEmployerRating(5);
+      }
     } else {
       setEmployerRating(5);
     }
