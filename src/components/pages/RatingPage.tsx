@@ -161,13 +161,12 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
 
       if (ratingError) throw new Error(ratingError);
 
-      // Statement goes to the employee — their employer has rated them
-      if (selectedEmployee.user_id) {
-        await wages.statements.create({
-          user_id: selectedEmployee.user_id,
-          message: `PERFORMANCE RATING RECEIVED\n\nYour employer ${user?.name} has given you a ${rating} star rating.\nDate: ${ratingDate}${comment.trim() ? `\n\nComment:\n${comment}` : ''}\n\n- Performance Review System`,
-        });
-      }
+      // Statement creation: backend always records under the JWT user (the employer)
+      // so wording is a confirmation for the employer's own records
+      await wages.statements.create({
+        user_id: user?.id,
+        message: `RATING SUBMITTED\n\nYou gave ${selectedEmployee.name} a ${rating} star performance rating.\nDate: ${ratingDate}${comment.trim() ? `\n\nComment:\n${comment}` : ''}\n\n- Performance Review System`,
+      });
 
       setShowRatingModal(false);
       setSelectedEmployee(null);
@@ -201,10 +200,11 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
 
       if (ratingError) throw new Error(ratingError);
 
-      // Statement goes to the employer — their employee has rated them
+      // Statement creation: backend always records under the JWT user (the employee)
+      // so wording is a confirmation for the employee's own records
       await wages.statements.create({
-        user_id: selectedEmployer.id,
-        message: `EMPLOYER RATING RECEIVED\n\nYour employee ${user?.name} has given you a ${employerRating} star rating.${employerComment.trim() ? `\n\nComment:\n${employerComment}` : ''}\n\n- Rating System`,
+        user_id: user?.id,
+        message: `RATING SUBMITTED\n\nYou gave your employer ${selectedEmployer.name} a ${employerRating} star rating.${employerComment.trim() ? `\n\nComment:\n${employerComment}` : ''}\n\n- Rating System`,
       });
 
       setShowEmployerRatingModal(false);

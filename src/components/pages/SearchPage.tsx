@@ -67,6 +67,7 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
   const [myPosts, setMyPosts] = useState<Job[]>([]);
   const [postingJob, setPostingJob] = useState(false);
   const [postingRequest, setPostingRequest] = useState(false);
+  const [professionFilter, setProfessionFilter] = useState('');
   const [confirmAction, setConfirmAction] = useState<{ message: string; onConfirm: () => void } | null>(null);
 
   const handleMessages = () => {
@@ -95,13 +96,13 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
   }, [user]);
 
   useEffect(() => {
-    if (searchQuery.length === 0) {
+    if (searchQuery.length === 0 && !professionFilter) {
       setSearchResults([]);
       return;
     }
     const timer = setTimeout(() => searchPeople(), 300);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, professionFilter]);
 
   const loadFriendRequests = async () => {
     if (!user) return;
@@ -141,24 +142,36 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
   };
 
   const searchPeople = async () => {
-    if (!user || searchQuery.length === 0) return;
-
-    const { data, error } = await profiles.list();
-    if (error || !data) return;
-
-    const q = searchQuery.toLowerCase();
-    let filtered = (data as Profile[]).filter((p: Profile) => p.id !== user.id);
-
-    if (user.role === 'employer') {
-      filtered = filtered.filter((p: Profile) =>
-        p.name?.toLowerCase().includes(q) || p.profession?.toLowerCase().includes(q)
-      );
-    } else {
-      filtered = filtered.filter((p: Profile) => p.name?.toLowerCase().includes(q));
+    if (!user) return;
+    const q = searchQuery.trim();
+    if (!q && !professionFilter) {
+      setSearchResults([]);
+      return;
     }
 
-    filtered.sort((a, b) => a.name?.localeCompare(b.name ?? '') ?? 0);
-    setSearchResults(filtered.slice(0, 20));
+    try {
+      let query = supabase
+        .from('profiles')
+        .select('id, name, email, role, profile_photo, profession')
+        .neq('id', user.id);
+
+      if (q) {
+        // search name, email, and profession text
+        query = query.or(`name.ilike.%${q}%,email.ilike.%${q}%,profession.ilike.%${q}%`);
+      }
+
+      if (professionFilter) {
+        query = query.ilike('profession', `%${professionFilter}%`);
+      }
+
+      const { data, error } = await query.order('name', { ascending: true }).limit(20);
+
+      if (!error && data) {
+        setSearchResults(data as Profile[]);
+      }
+    } catch {
+      // silently fail — no results shown
+    }
   };
 
   const sendFriendRequest = async (receiverId: string) => {
@@ -415,17 +428,45 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
             </div>
           )}
 
-          {/* Search Bar */}
-          {searchType !== 'jobs' && (
-            <div className="relative mb-6">
-              <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={searchType === 'users' ? 'Search users by name...' : 'Search people by name...'}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+          {/* Search Bar + Profession Filter */}
+          {searchType === 'users' && (
+            <div className="space-y-3 mb-6">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name or email..."
+                  style={{ fontSize: '16px' }}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <select
+                value={professionFilter}
+                onChange={(e) => setProfessionFilter(e.target.value)}
+                style={{ fontSize: '16px' }}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-gray-700"
+              >
+                <option value="">All Professions</option>
+                <option value="carpenter">Carpenter</option>
+                <option value="caretaker">Caretaker</option>
+                <option value="cleaner">Cleaner</option>
+                <option value="cook">Cook</option>
+                <option value="driver">Driver</option>
+                <option value="electrician">Electrician</option>
+                <option value="gardener">Gardener</option>
+                <option value="housekeeper">Housekeeper</option>
+                <option value="laundry worker">Laundry Worker</option>
+                <option value="maid">Maid</option>
+                <option value="maintenance worker">Maintenance Worker</option>
+                <option value="nanny">Nanny</option>
+                <option value="painter">Painter</option>
+                <option value="pet care">Pet Care</option>
+                <option value="plumber">Plumber</option>
+                <option value="security guard">Security Guard</option>
+                <option value="tutor">Tutor</option>
+              </select>
             </div>
           )}
 
@@ -517,17 +558,17 @@ export function SearchPage({ onReferFriend, onMessages }: SearchPageProps) {
                     </div>
                   </div>
                 ))
-              ) : searchQuery.length > 0 ? (
+              ) : (searchQuery.length > 0 || professionFilter) ? (
                 <div className="text-center py-12">
                   <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600">No users found</p>
-                  <p className="text-sm text-gray-500">Try searching by name</p>
+                  <p className="text-sm text-gray-500">Try a different name or profession</p>
                 </div>
               ) : (
                 <div className="text-center py-12">
                   <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <p className="text-gray-600">Search for users</p>
-                  <p className="text-sm text-gray-500">Enter a name to find users</p>
+                  <p className="text-sm text-gray-500">Enter a name, email, or select a profession</p>
                 </div>
               )
             ) : searchType === 'posts' && user?.role === 'employee' ? (
