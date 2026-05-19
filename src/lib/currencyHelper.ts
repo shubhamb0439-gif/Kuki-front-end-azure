@@ -31,34 +31,28 @@ const CURRENCY_BY_COUNTRY: Record<string, string> = {
  */
 export async function detectCurrency(): Promise<string> {
   try {
-    // Try to get currency from Intl API
+    // Timezone is set by the OS to the user's actual location — check it first
+    const timezoneCurrency = await detectCurrencyFromGeolocation();
+    if (timezoneCurrency && timezoneCurrency !== 'USD') {
+      return timezoneCurrency;
+    }
+
+    // Locale-based detection as secondary signal
     const locale = navigator.language || 'en-US';
     const regionCode = locale.split('-')[1] || locale.toUpperCase();
-
-    // Check if we have a mapping for this region
     if (CURRENCY_BY_COUNTRY[regionCode]) {
       return CURRENCY_BY_COUNTRY[regionCode];
     }
 
-    // Try to use Intl.NumberFormat to detect currency
-    const formatter = new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: 'USD',
-    });
-
-    const resolvedOptions = formatter.resolvedOptions();
-    if (resolvedOptions.currency) {
-      return resolvedOptions.currency;
+    // Intl.NumberFormat can sometimes resolve the local currency
+    const formatter = new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' });
+    const resolved = formatter.resolvedOptions();
+    if (resolved.currency && resolved.currency !== 'USD') {
+      return resolved.currency;
     }
 
-    // Try geolocation API as fallback
-    const currency = await detectCurrencyFromGeolocation();
-    if (currency) {
-      return currency;
-    }
-
-    // Default fallback
-    return 'USD';
+    // Return timezone result even if it's USD (means we're probably in the US)
+    return timezoneCurrency || 'USD';
   } catch (error) {
     console.error('Error detecting currency:', error);
     return 'USD';

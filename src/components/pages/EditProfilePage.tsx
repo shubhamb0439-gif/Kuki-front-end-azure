@@ -81,7 +81,8 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
       setPhone(data?.phone || user.phone || '');
       setEmail(data?.email || user.email || '');
       setProfession((data?.profession || user.profession || '').toLowerCase());
-      if (data?.currency) {
+      // If currency was never explicitly set (null) or still at system default (USD), auto-detect from location
+      if (data?.currency && data.currency !== 'USD') {
         setCurrency(data.currency);
       } else {
         detectCurrency().then(setCurrency);

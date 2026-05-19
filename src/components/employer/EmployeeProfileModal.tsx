@@ -94,7 +94,8 @@ export function EmployeeProfileModal({ employee, onClose, onUpdate }: EmployeePr
     const profileId = employee.user_id || employee.employer_id;
     if (profileId) {
       const { data: profileData } = await profiles.get(profileId);
-      if (profileData?.currency) {
+      // If currency was never explicitly set or is still at system default (USD), auto-detect from location
+      if (profileData?.currency && profileData.currency !== 'USD') {
         setEmployeeCurrency(profileData.currency);
       } else {
         detectCurrency().then(setEmployeeCurrency);
