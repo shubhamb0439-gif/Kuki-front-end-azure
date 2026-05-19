@@ -66,6 +66,10 @@ export function EmployeeHome({ onReferFriend, onMessages }: EmployeeHomeProps) {
   };
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
     if (user) {
       Promise.all([
         checkLinkedEmployer(),

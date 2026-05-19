@@ -80,9 +80,13 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
     if (!user) return;
     const { data, error } = await admin.ratings.listByEmployee(user.id);
     if (!error && data) {
-      setPerformanceData(data as any);
-      if (data.length > 0) {
-        const avg = data.reduce((sum: number, r: any) => sum + r.rating, 0) / data.length;
+      // Only show ratings given TO this employee by employers, not ratings they gave
+      const received = (data as any[]).filter((r: any) =>
+        !r.rating_type || r.rating_type === 'employer_to_employee'
+      );
+      setPerformanceData(received);
+      if (received.length > 0) {
+        const avg = received.reduce((sum: number, r: any) => sum + r.rating, 0) / received.length;
         setAverageRating(Math.round(avg * 10) / 10);
       }
     }
@@ -145,6 +149,7 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
         rating_date: ratingDate,
         rating,
         comment: comment.trim(),
+        rating_type: 'employer_to_employee',
       });
 
       if (ratingError) throw new Error(ratingError);
@@ -180,8 +185,10 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
       const { error: ratingError } = await admin.ratings.upsert({
         employer_id: selectedEmployer.id,
         employee_id: user?.id,
+        rating_date: new Date().toISOString().split('T')[0],
         rating: employerRating,
         comment: employerComment.trim(),
+        rating_type: 'employee_to_employer',
       });
 
       if (ratingError) throw new Error(ratingError);
@@ -358,11 +365,9 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
                     <div key={perf.id} className="bg-white border border-gray-200 rounded-lg p-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-gray-900">
-                          {new Date(perf.rating_date).toLocaleDateString('en-GB', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric'
-                          })}
+                          {perf.rating_date
+                            ? new Date(perf.rating_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                            : '—'}
                         </span>
                         <StarRating currentRating={perf.rating} readonly />
                       </div>

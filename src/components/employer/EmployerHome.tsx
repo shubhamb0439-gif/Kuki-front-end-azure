@@ -69,6 +69,10 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
   };
 
   useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  useEffect(() => {
     if (user) {
       // Load fresh data immediately
       Promise.all([

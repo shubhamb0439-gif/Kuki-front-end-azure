@@ -632,43 +632,64 @@ export function CalendarPage({ onReferFriend, onMessages }: CalendarPageProps) {
                     })}
                   </span>
                 </div>
-                {selectedDateSummary.login_time && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Login Time:</span>
-                    <span className="text-sm font-medium text-gray-900">
-                      {new Date(selectedDateSummary.login_time).toLocaleTimeString('en-US', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true
-                      })}
-                    </span>
-                  </div>
-                )}
-                {selectedDateSummary.logout_time ? (
-                  <>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Logout Time:</span>
-                      <span className="text-sm font-medium text-gray-900">
-                        {new Date(selectedDateSummary.logout_time).toLocaleTimeString('en-US', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: true
-                        })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                      <span className="text-sm font-semibold text-gray-700">Total Hours:</span>
-                      <span className="text-base font-bold text-green-600">
-                        {selectedDateSummary.total_hours ? `${Math.floor(selectedDateSummary.total_hours)}h ${Math.round((selectedDateSummary.total_hours % 1) * 60)}m` : '0h 0m'}
-                      </span>
-                    </div>
-                  </>
-                ) : selectedDateSummary.login_time ? (
-                  <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                    <span className="text-sm font-semibold text-yellow-700">Status:</span>
-                    <span className="text-sm font-medium text-yellow-600">Pending Logout</span>
-                  </div>
-                ) : null}
+                {(() => {
+                  const loginMs = selectedDateSummary.login_time ? new Date(selectedDateSummary.login_time).getTime() : 0;
+                  const logoutMs = selectedDateSummary.logout_time ? new Date(selectedDateSummary.logout_time).getTime() : 0;
+                  const isRegularized = loginMs > 0 && logoutMs > 0 && Math.abs(logoutMs - loginMs) < 60000;
+
+                  if (isRegularized) {
+                    return (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Entry Type:</span>
+                          <span className="text-sm font-medium text-blue-600">Regularized</span>
+                        </div>
+                        {selectedDateSummary.total_hours ? (
+                          <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                            <span className="text-sm font-semibold text-gray-700">Total Hours:</span>
+                            <span className="text-base font-bold text-green-600">
+                              {`${Math.floor(selectedDateSummary.total_hours)}h ${Math.round((selectedDateSummary.total_hours % 1) * 60)}m`}
+                            </span>
+                          </div>
+                        ) : null}
+                      </>
+                    );
+                  }
+
+                  return (
+                    <>
+                      {selectedDateSummary.login_time && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Login Time:</span>
+                          <span className="text-sm font-medium text-gray-900">
+                            {new Date(selectedDateSummary.login_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                          </span>
+                        </div>
+                      )}
+                      {selectedDateSummary.logout_time ? (
+                        <>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-600">Logout Time:</span>
+                            <span className="text-sm font-medium text-gray-900">
+                              {new Date(selectedDateSummary.logout_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                            <span className="text-sm font-semibold text-gray-700">Total Hours:</span>
+                            <span className="text-base font-bold text-green-600">
+                              {selectedDateSummary.total_hours ? `${Math.floor(selectedDateSummary.total_hours)}h ${Math.round((selectedDateSummary.total_hours % 1) * 60)}m` : '0h 0m'}
+                            </span>
+                          </div>
+                        </>
+                      ) : selectedDateSummary.login_time ? (
+                        <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                          <span className="text-sm font-semibold text-yellow-700">Status:</span>
+                          <span className="text-sm font-medium text-yellow-600">Pending Logout</span>
+                        </div>
+                      ) : null}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           ) : (

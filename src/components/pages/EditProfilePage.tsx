@@ -10,18 +10,23 @@ import { useSwipeGesture } from '../../hooks/useSwipeGesture';
 import LanguageSelector from '../common/LanguageSelector';
 
 const PROFESSIONS = [
-  { id: 'gardener', name: 'Gardener' },
-  { id: 'maid', name: 'Maid' },
-  { id: 'driver', name: 'Driver' },
-  { id: 'cook', name: 'Cook' },
-  { id: 'nanny', name: 'Nanny' },
-  { id: 'cleaner', name: 'Cleaner' },
+  { id: 'carpenter', name: 'Carpenter' },
   { id: 'caretaker', name: 'Caretaker' },
-  { id: 'security', name: 'Security Guard' },
-  { id: 'maintenance', name: 'Maintenance Worker' },
-  { id: 'laundry', name: 'Laundry Worker' },
-  { id: 'pet_care', name: 'Pet Care' },
-  { id: 'tutor', name: 'Tutor' }
+  { id: 'cleaner', name: 'Cleaner' },
+  { id: 'cook', name: 'Cook' },
+  { id: 'driver', name: 'Driver' },
+  { id: 'electrician', name: 'Electrician' },
+  { id: 'gardener', name: 'Gardener' },
+  { id: 'housekeeper', name: 'Housekeeper' },
+  { id: 'laundry worker', name: 'Laundry Worker' },
+  { id: 'maid', name: 'Maid' },
+  { id: 'maintenance worker', name: 'Maintenance Worker' },
+  { id: 'nanny', name: 'Nanny' },
+  { id: 'painter', name: 'Painter' },
+  { id: 'pet care', name: 'Pet Care' },
+  { id: 'plumber', name: 'Plumber' },
+  { id: 'security guard', name: 'Security Guard' },
+  { id: 'tutor', name: 'Tutor' },
 ];
 
 const CURRENCY_OPTIONS = [
@@ -332,7 +337,7 @@ export function EditProfilePage({ onReferFriend, onMessages }: EditProfilePagePr
                 >
                   <option value="">{t('profile.selectProfession')}</option>
                   {PROFESSIONS.map((prof) => (
-                    <option key={prof.id} value={prof.id}>
+                    <option key={prof.id} value={prof.name.toLowerCase()}>
                       {prof.name}
                     </option>
                   ))}

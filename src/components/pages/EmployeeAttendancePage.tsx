@@ -407,13 +407,6 @@ export function EmployeeAttendancePage({ onReferFriend, onMessages }: EmployeeAt
             </div>
           </div>
 
-          <button
-            onClick={() => setShowStatementModal(true)}
-            className="w-full mt-5 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors"
-          >
-            <FileText className="w-5 h-5" />
-            Generate Attendance Statement
-          </button>
         </div>
 
         {/* Date detail panel */}
