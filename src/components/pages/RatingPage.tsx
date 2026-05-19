@@ -145,7 +145,7 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
 
       const { error: ratingError } = await admin.ratings.upsert({
         employer_id: user?.id,
-        employee_id: selectedEmployee.id,
+        employee_id: selectedEmployee.user_id,
         rating_date: ratingDate,
         rating,
         comment: comment.trim(),
@@ -154,10 +154,10 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
 
       if (ratingError) throw new Error(ratingError);
 
-      if (comment.trim() && selectedEmployee.user_id) {
+      if (selectedEmployee.user_id) {
         await wages.statements.create({
           user_id: selectedEmployee.user_id,
-          message: `PERFORMANCE RATING RECEIVED\n\nFrom: ${user?.name}\nDate: ${ratingDate}\nRating: ${rating} stars\n\nComment:\n${comment}\n\n- Performance Review System`,
+          message: `PERFORMANCE RATING RECEIVED\n\nFrom: ${user?.name}\nDate: ${ratingDate}\nRating: ${rating} stars${comment.trim() ? `\n\nComment:\n${comment}` : ''}\n\n- Performance Review System`,
         });
       }
 
@@ -184,7 +184,7 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
     try {
       const { error: ratingError } = await admin.ratings.upsert({
         employer_id: selectedEmployer.id,
-        employee_id: user?.id,
+        employee_id: selectedEmployer.id,
         rating_date: new Date().toISOString().split('T')[0],
         rating: employerRating,
         comment: employerComment.trim(),
@@ -424,6 +424,7 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
                       const emp = employeeList.find(emp => emp.id === e.target.value);
                       setSelectedEmployee(emp || null);
                     }}
+                    style={{ fontSize: '16px' }}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Choose an employee...</option>
@@ -455,7 +456,8 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
                     placeholder="Enter your performance remarks..."
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg resize-none h-24 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    style={{ fontSize: '16px' }}
+                    className="w-full p-3 border border-gray-300 rounded-lg resize-none h-24 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
@@ -501,6 +503,7 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
                       const emp = employers.find(emp => emp.id === e.target.value);
                       setSelectedEmployer(emp || null);
                     }}
+                    style={{ fontSize: '16px' }}
                     className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Choose an employer...</option>
@@ -532,7 +535,8 @@ export function RatingPage({ onReferFriend, onMessages }: RatingPageProps) {
                     placeholder="Share your experience working with this employer..."
                     value={employerComment}
                     onChange={(e) => setEmployerComment(e.target.value)}
-                    className="w-full p-3 border border-gray-300 rounded-lg resize-none h-24 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    style={{ fontSize: '16px' }}
+                    className="w-full p-3 border border-gray-300 rounded-lg resize-none h-24 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
