@@ -114,6 +114,26 @@ function AppContent() {
     return <LoadingScreen />;
   }
 
+  // Handle reset-password link — runs before any user/device checks so it works
+  // whether logged in or not, on mobile or desktop, with hash or path URL formats
+  const _hashPath = window.location.hash.replace(/^#\/?/, '').split('?')[0];
+  const _pathName = window.location.pathname.replace(/^\//, '');
+  const _resetToken =
+    new URLSearchParams(window.location.hash.split('?')[1] || '').get('token') ||
+    new URLSearchParams(window.location.search).get('token');
+  if ((_hashPath === 'reset-password' || _pathName === 'reset-password') && _resetToken) {
+    return (
+      <ResetPasswordPage
+        token={_resetToken}
+        onDone={() => {
+          window.history.replaceState(null, '', '/');
+          window.location.hash = '';
+          setAuthMode('login');
+        }}
+      />
+    );
+  }
+
   // Desktop/Tablet mode - Employer and Admin only
   if (isDesktop) {
     if (!user) {
@@ -153,21 +173,6 @@ function AppContent() {
 
   // Mobile mode - Full functionality
   if (!user) {
-    // Handle reset-password link before showing login/signup
-    const hashPath = window.location.hash.replace('#/', '').split('?')[0];
-    const resetToken = new URLSearchParams(window.location.hash.split('?')[1] || '').get('token');
-    if (hashPath === 'reset-password' && resetToken) {
-      return (
-        <ResetPasswordPage
-          token={resetToken}
-          onDone={() => {
-            window.location.hash = '';
-            setAuthMode('login');
-          }}
-        />
-      );
-    }
-
     return (
       <div className="min-h-screen relative">
         {authMode === 'login' ? (
