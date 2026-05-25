@@ -3,6 +3,7 @@ import { Users, Briefcase, TrendingUp, Activity, Plus, CreditCard as Edit2, Tras
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
 import { employees, profiles, attendance, wages, messages, admin } from '../../lib/api';
+import { supabase } from '../../lib/supabase';
 import { Header } from '../common/Header';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { isLargeScreen } from '../../lib/deviceHelper';
@@ -333,8 +334,17 @@ export function AdminDashboard({ onReferFriend, onMessages }: AdminDashboardProp
       if (newAd.video_type === 'upload' && newAd.video_file) {
         const fileExt = newAd.video_file.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        // TODO: video upload via Azure Blob Storage API
-        videoFilePath = fileName;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('ad-videos')
+          .upload(fileName, newAd.video_file);
+
+        if (uploadError) {
+          toast.showError('Upload Error', 'Failed to upload video file. Please try again.');
+          return;
+        }
+
+        videoFilePath = (uploadData as any)?.path || fileName;
       }
 
       const { error } = await admin.ads.create({
@@ -353,7 +363,10 @@ export function AdminDashboard({ onReferFriend, onMessages }: AdminDashboardProp
       if (!error) {
         setNewAd({ title: '', description: '', video_url: '', video_type: 'url', video_file: null, brand_name: '', rate_per_display: '0.00', currency: 'USD' });
         setIsAddingAd(false);
+        toast.showSuccess('Success', 'Advertisement added successfully');
         loadAdvertisements();
+      } else {
+        toast.showError('Error', 'Failed to add advertisement. Please try again');
       }
     } catch (error) {
       console.error('Error adding advertisement:', error);
@@ -383,8 +396,17 @@ export function AdminDashboard({ onReferFriend, onMessages }: AdminDashboardProp
       if (editAd.video_type === 'upload' && editAd.video_file) {
         const fileExt = editAd.video_file.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-        // TODO: video upload via Azure Blob Storage API
-        videoFilePath = fileName;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('ad-videos')
+          .upload(fileName, editAd.video_file);
+
+        if (uploadError) {
+          toast.showError('Upload Error', 'Failed to upload video file. Please try again.');
+          return;
+        }
+
+        videoFilePath = (uploadData as any)?.path || fileName;
       }
 
       const { error } = await admin.ads.update(id, {
@@ -400,7 +422,10 @@ export function AdminDashboard({ onReferFriend, onMessages }: AdminDashboardProp
 
       if (!error) {
         setEditingAd(null);
+        toast.showSuccess('Success', 'Advertisement updated successfully');
         loadAdvertisements();
+      } else {
+        toast.showError('Error', 'Failed to update advertisement. Please try again');
       }
     } catch (error) {
       console.error('Error updating advertisement:', error);
@@ -426,9 +451,15 @@ export function AdminDashboard({ onReferFriend, onMessages }: AdminDashboardProp
         setConfirmAction(null);
         try {
           const { error } = await admin.ads.delete(id);
-          if (!error) loadAdvertisements();
+          if (!error) {
+            toast.showSuccess('Deleted', 'Advertisement deleted successfully');
+            loadAdvertisements();
+          } else {
+            toast.showError('Error', 'Failed to delete advertisement');
+          }
         } catch (error) {
           console.error('Error deleting advertisement:', error);
+          toast.showError('Error', 'Failed to delete advertisement');
         }
       }
     });

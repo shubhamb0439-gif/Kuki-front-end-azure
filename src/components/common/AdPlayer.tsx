@@ -31,6 +31,7 @@ export function AdPlayer({ userId, adsEnabled }: AdPlayerProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showPlayButton, setShowPlayButton] = useState(false);
+  const [videoError, setVideoError] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -173,6 +174,7 @@ export function AdPlayer({ userId, adsEnabled }: AdPlayerProps) {
     setCurrentTime(0);
     setIsPlaying(false);
     setShowPlayButton(false);
+    setVideoError(false);
   };
 
   const recordImpression = async (adId: string) => {
@@ -282,19 +284,36 @@ export function AdPlayer({ userId, adsEnabled }: AdPlayerProps) {
 
       {videoSource.type === 'upload' ? (
         <>
-          <video
-            ref={videoRef}
-            src={videoSource.url}
-            className="w-full h-full object-cover"
-            playsInline
-            onEnded={handleVideoEnd}
-            onContextMenu={(e) => e.preventDefault()}
-            controlsList="nodownload nofullscreen noremoteplayback"
-            disablePictureInPicture
-            muted={false}
-          />
+          {videoError ? (
+            <div className="flex flex-col items-center justify-center w-full h-full text-white">
+              <svg className="w-16 h-16 mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.069A1 1 0 0121 8.868v6.264a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+              </svg>
+              <p className="text-lg font-medium text-gray-300">Video unavailable</p>
+              <button
+                onClick={closeAd}
+                className="mt-6 bg-white hover:bg-gray-100 text-gray-900 px-6 py-2 rounded-full font-semibold transition-colors"
+              >
+                Continue
+              </button>
+            </div>
+          ) : (
+            <video
+              ref={videoRef}
+              src={videoSource.url}
+              className="w-full h-full object-cover"
+              playsInline
+              crossOrigin="anonymous"
+              onEnded={handleVideoEnd}
+              onError={() => { setVideoError(true); setCanClose(true); }}
+              onContextMenu={(e) => e.preventDefault()}
+              controlsList="nodownload nofullscreen noremoteplayback"
+              disablePictureInPicture
+              muted={false}
+            />
+          )}
 
-          {showPlayButton && (
+          {!videoError && showPlayButton && (
             <button
               onClick={handlePlayClick}
               className="absolute inset-0 z-20 flex items-center justify-center bg-black bg-opacity-30"
