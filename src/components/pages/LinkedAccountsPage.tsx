@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Crown, Link as LinkIcon, X, Check, UserPlus, Copy, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useViewAs } from '../../contexts/ViewAsContext';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { Header } from '../common/Header';
 import { getPlanDisplayName } from '../../lib/subscriptionHelper';
@@ -32,6 +33,7 @@ interface LinkedAccount {
 export function LinkedAccountsPage() {
   const { user } = useAuth();
   const toast = useToast();
+  const { viewAs, setViewAs } = useViewAs();
   const [linkedAccounts, setLinkedAccounts] = useState<LinkedAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
@@ -75,20 +77,45 @@ export function LinkedAccountsPage() {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      const { data: links, error } = await supabase
         .from('account_links')
-        .select(`
-          *,
-          primary_account:profiles!account_links_primary_account_id_fkey(name, profile_photo, subscription_plan),
-          linked_account:profiles!account_links_linked_account_id_fkey(name, profile_photo)
-        `)
+        .select('*')
         .or(`primary_account_id.eq.${user.id},linked_account_id.eq.${user.id}`)
         .eq('status', 'active')
         .order('created_at', { ascending: false });
 
-      if (!error && data) {
-        setLinkedAccounts(data as any);
+      if (error || !links) {
+        setLoading(false);
+        return;
       }
+
+      // Collect unique profile IDs to look up
+      const profileIds = new Set<string>();
+      links.forEach((link: any) => {
+        if (link.primary_account_id) profileIds.add(link.primary_account_id);
+        if (link.linked_account_id) profileIds.add(link.linked_account_id);
+      });
+
+      // Fetch each profile individually (backend doesn't support JOIN syntax)
+      const profileMap: Record<string, any> = {};
+      await Promise.all(
+        Array.from(profileIds).map(async (id) => {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id, name, profile_photo, subscription_plan')
+            .eq('id', id)
+            .maybeSingle();
+          if (profile) profileMap[id] = profile;
+        })
+      );
+
+      const enriched = links.map((link: any) => ({
+        ...link,
+        primary_account: profileMap[link.primary_account_id] || null,
+        linked_account: link.linked_account_id ? profileMap[link.linked_account_id] || null : null,
+      }));
+
+      setLinkedAccounts(enriched as any);
     } catch (error) {
       console.error('Error loading linked accounts:', error);
     } finally {
@@ -148,7 +175,7 @@ export function LinkedAccountsPage() {
     try {
       const { data: linkData, error: findError } = await supabase
         .from('account_links')
-        .select('*, primary_account:profiles!account_links_primary_account_id_fkey(name, subscription_plan)')
+        .select('*')
         .eq('link_token', joinCode.trim())
         .eq('status', 'pending')
         .maybeSingle();
@@ -466,6 +493,31 @@ export function LinkedAccountsPage() {
 
                     <div className="flex items-center gap-3">
                       {getStatusBadge(link.status)}
+
+                      {link.status === 'active' && !isPrimary && (
+                        <button
+                          onClick={() => {
+                            const isCurrentlyViewing = viewAs?.id === link.primary_account_id;
+                            if (isCurrentlyViewing) {
+                              setViewAs(null);
+                            } else {
+                              setViewAs({
+                                id: link.primary_account_id,
+                                name: displayAccount?.name || 'Linked Account',
+                                access_type: link.access_type as 'read_only' | 'read_write',
+                              });
+                              window.location.hash = '';
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                            viewAs?.id === link.primary_account_id
+                              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                              : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                          }`}
+                        >
+                          {viewAs?.id === link.primary_account_id ? 'Exit View' : 'Switch View'}
+                        </button>
+                      )}
 
                       {link.status === 'pending' && link.linked_account_id === user?.id && (
                         <div className="flex gap-2">

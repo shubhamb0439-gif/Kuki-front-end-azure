@@ -92,7 +92,7 @@ export const profiles = {
 
 // ─── EMPLOYEES ────────────────────────────────────────────────────────────────
 export const employees = {
-  list: () => request<any[]>('GET', '/employees'),
+  list: (view_as?: string) => request<any[]>('GET', `/employees${view_as ? `?view_as=${view_as}` : ''}`),
   add: (data: Record<string, any>) => request<any>('POST', '/employees', data),
   link: (data: Record<string, any>) => request<any>('POST', '/employees/link', data),
   update: (id: string, updates: Record<string, any>) => request<any>('PATCH', `/employees/${id}`, updates),
@@ -173,6 +173,11 @@ export const emails = {
     request<any>('POST', '/emails/statement', { to_email, subject, statement_content }),
   sendReferral: (to_email: string, from_name: string, referral_link: string) =>
     request<any>('POST', '/emails/referral', { to_email, from_name, referral_link }),
+};
+
+// ─── ACCOUNT LINKS ────────────────────────────────────────────────────────────
+export const accountLinks = {
+  myLinks: () => request<any[]>('GET', '/account-links/my-links'),
 };
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────

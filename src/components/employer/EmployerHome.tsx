@@ -3,6 +3,7 @@ import { CreditCard as Edit, CreditCard, Plus, QrCode, Users, DollarSign, CheckC
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
+import { useViewAs } from '../../contexts/ViewAsContext';
 import { employees as employeesApi, profiles, attendance, wages, messages, admin, qrTransactions } from '../../lib/api';
 import { Employee } from '../../types/auth';
 import { Header } from '../common/Header';
@@ -28,6 +29,7 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
   const { user, signOut } = useAuth();
   const { colors } = useTheme();
   const { showSuccess, showError, showInfo } = useToast();
+  const { viewAs, isReadOnly } = useViewAs();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [showQRCode, setShowQRCode] = useState(false);
   const [showQROptions, setShowQROptions] = useState(false);
@@ -155,7 +157,7 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
   const fetchEmployees = async () => {
     if (!user) return;
 
-    const { data, error } = await employeesApi.list();
+    const { data, error } = await employeesApi.list(viewAs?.id);
 
     if (error) {
       console.error('Error fetching employees:', error);
@@ -524,8 +526,8 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
               );
             })}
 
-            {/* Add Employee Button - appears after all employees */}
-            {employees.length < 12 && (
+            {/* Add Employee Button - hidden in read-only view-as mode */}
+            {employees.length < 12 && !isReadOnly && !viewAs && (
               <button
                 onClick={handleAddEmployeeClick}
                 className={`w-20 h-20 ${colors.primary} rounded-full flex items-center justify-center shadow-lg ${colors.primaryHover} transition-colors`}

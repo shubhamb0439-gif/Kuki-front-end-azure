@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ViewAsProvider, useViewAs } from './contexts/ViewAsContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { OnboardingProvider } from './contexts/OnboardingContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -34,6 +35,7 @@ import { isLargeScreen } from './lib/deviceHelper';
 
 function AppContent() {
   const { user, loading, profile, signOut } = useAuth();
+  const { viewAs, setViewAs } = useViewAs();
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [currentPage, setCurrentPage] = useState('home');
   const [showReferModal, setShowReferModal] = useState(false);
@@ -265,8 +267,20 @@ function AppContent() {
   return (
     <OrientationLock>
       <div className="min-h-screen bg-gray-50" style={{ height: 'auto' }}>
+        {/* Viewing-as banner */}
+        {viewAs && (
+          <div className="fixed top-0 left-0 right-0 z-[9998] bg-amber-500 text-white flex items-center justify-between px-4 py-2 text-sm font-medium shadow-md">
+            <span>Viewing <strong>{viewAs.name}</strong>'s account {viewAs.access_type === 'read_only' ? '(Read Only)' : '(Read & Write)'}</span>
+            <button
+              onClick={() => setViewAs(null)}
+              className="bg-white text-amber-600 px-3 py-1 rounded-full text-xs font-semibold hover:bg-amber-50 transition-colors"
+            >
+              Return to my account
+            </button>
+          </div>
+        )}
         {/* Main Content */}
-        <div className="pb-20" style={{ minHeight: '100vh' }}>
+        <div className={`pb-20 ${viewAs ? 'pt-10' : ''}`} style={{ minHeight: '100vh' }}>
           {renderCurrentPage()}
         </div>
 
@@ -295,9 +309,11 @@ function App() {
       <LanguageProvider>
         <ThemeProvider>
           <ToastProvider>
-            <OnboardingProvider>
-              <AppContent />
-            </OnboardingProvider>
+            <ViewAsProvider>
+              <OnboardingProvider>
+                <AppContent />
+              </OnboardingProvider>
+            </ViewAsProvider>
           </ToastProvider>
         </ThemeProvider>
       </LanguageProvider>
