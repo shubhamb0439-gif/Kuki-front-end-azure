@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Users, Crown, Link as LinkIcon, X, Check, UserPlus, Copy, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../contexts/ToastContext';
-import { employees, profiles, attendance, wages, messages, admin } from '../../lib/api';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { Header } from '../common/Header';
 import { getPlanDisplayName } from '../../lib/subscriptionHelper';
@@ -110,20 +109,15 @@ export function LinkedAccountsPage() {
 
     try {
       const linkToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      const referralCode = Math.random().toString(36).substring(2, 10).toUpperCase();
 
-      const { data, error } = await supabase
-        .rpc('generate_referral_code', { user_id: user.id });
-
-      if (error) throw error;
-
-      const code = data as string;
       const { error: insertError } = await supabase
         .from('account_links')
         .insert({
           primary_account_id: user.id,
           link_type: 'family',
           status: 'pending',
-          referral_code: code,
+          referral_code: referralCode,
           link_token: linkToken,
           access_type: selectedPermission,
           shares_subscription: true,
@@ -379,7 +373,7 @@ export function LinkedAccountsPage() {
               <div className="flex items-center gap-3">
                 <Crown className="w-6 h-6 text-yellow-600" />
                 <div>
-                  <p className="font-semibold text-gray-900">{user?.subscription_plan === 'pro_plus' ? 'Pro Plus Account' : 'Pro Account'}</p>
+                  <p className="font-semibold text-gray-900">{isGoldOrPlus ? 'Pro Plus Account' : 'Pro Account'}</p>
                   <p className="text-sm text-gray-700">You can create links to share your account with others!</p>
                 </div>
               </div>
