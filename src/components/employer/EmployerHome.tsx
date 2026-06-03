@@ -104,7 +104,7 @@ export function EmployerHome({ onReferFriend, onMessages }: EmployerHomeProps) {
         if (cleanupQRTransactions) cleanupQRTransactions();
       };
     }
-  }, [user]);
+  }, [user, viewAs?.id]);
 
   const subscribeToQRTransactions = () => {
     if (!user) return;

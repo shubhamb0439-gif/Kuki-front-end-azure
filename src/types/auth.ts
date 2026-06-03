@@ -6,7 +6,8 @@ export interface User {
   role: 'employer' | 'employee' | 'admin';
   account_type?: 'normal' | 'record_holder';
   account_tier?: 'core' | 'plus';
-  subscription_plan?: 'bronze' | 'silver' | 'gold';
+  subscription_plan?: 'bronze' | 'silver' | 'gold' | 'free' | 'core' | 'pro' | 'pro_plus';
+  ads_enabled?: boolean;
   max_employees?: number;
   can_track_attendance?: boolean;
   can_access_full_statements?: boolean;

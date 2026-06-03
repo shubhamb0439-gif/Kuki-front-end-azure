@@ -41,7 +41,6 @@ function AppContent() {
   const [showReferModal, setShowReferModal] = useState(false);
   const [showSignupSuccess, setShowSignupSuccess] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
-  const [desktopLoginSuccess, setDesktopLoginSuccess] = useState(false);
   const [showTransitionBlur, setShowTransitionBlur] = useState(false);
   const [showAd, setShowAd] = useState(false);
   const [adShownThisSession, setAdShownThisSession] = useState(false);
@@ -139,7 +138,7 @@ function AppContent() {
   // Desktop/Tablet mode - Employer and Admin only
   if (isDesktop) {
     if (!user) {
-      return <DesktopEmployerLogin onLoginSuccess={() => setDesktopLoginSuccess(true)} />;
+      return <DesktopEmployerLogin onLoginSuccess={() => {}} />;
     }
 
     if (user.role === 'employer') {
@@ -280,7 +279,7 @@ function AppContent() {
           </div>
         )}
         {/* Main Content */}
-        <div className={`pb-20 ${viewAs ? 'pt-10' : ''}`} style={{ minHeight: '100vh' }}>
+        <div className="pb-20" style={{ minHeight: '100vh' }}>
           {renderCurrentPage()}
         </div>
 
@@ -297,7 +296,7 @@ function AppContent() {
         {showReferModal && <ReferFriendModal onClose={() => setShowReferModal(false)} />}
 
         {/* Ad Player - Shows on app launch */}
-        {showAd && <AdPlayer onClose={() => setShowAd(false)} />}
+        {showAd && user && <AdPlayer userId={user.id} adsEnabled={true} />}
       </div>
     </OrientationLock>
   );
