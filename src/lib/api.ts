@@ -175,6 +175,12 @@ export const emails = {
     request<any>('POST', '/emails/referral', { to_email, from_name, referral_link }),
 };
 
+// ─── PAYMENTS ─────────────────────────────────────────────────────────────────
+export const payments = {
+  createLink: (plan: 'core' | 'pro' | 'pro_plus') =>
+    request<{ payment_url: string; reference: string }>('POST', '/payments/pesawise/create-link', { plan }),
+};
+
 // ─── ACCOUNT LINKS ────────────────────────────────────────────────────────────
 export const accountLinks = {
   myLinks: () => request<any[]>('GET', '/account-links/my-links'),

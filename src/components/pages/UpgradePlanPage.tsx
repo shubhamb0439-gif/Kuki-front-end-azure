@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { X, CreditCard, Zap, Check, ArrowLeft } from 'lucide-react';
-import { employees, profiles, attendance, wages, messages, admin } from '../../lib/api';
+import { X, CreditCard, Zap, Check, ArrowLeft, ExternalLink } from 'lucide-react';
+import { profiles, payments } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { useLanguage } from '../../contexts/LanguageContext';
 import { formatPlanPrice } from '../../lib/currencyHelper';
 
 interface UpgradePlanPageProps {
@@ -14,14 +13,8 @@ interface UpgradePlanPageProps {
 
 export function UpgradePlanPage({ selectedPlan, trialUsed = false, detectedCurrency = 'USD', onClose }: UpgradePlanPageProps) {
   const { user } = useAuth();
-  const { t } = useLanguage();
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [upgradeError, setUpgradeError] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiryDate, setExpiryDate] = useState('');
-  const [cvv, setCvv] = useState('');
-  const [cardName, setCardName] = useState('');
 
   const planDetails = {
     core: {
@@ -64,161 +57,51 @@ export function UpgradePlanPage({ selectedPlan, trialUsed = false, detectedCurre
 
   const plan = planDetails[selectedPlan];
 
-  const handleStartTrial = async (withPayment: boolean) => {
+  const handleStartTrial = async () => {
     if (!user) return;
-
     setIsProcessing(true);
-
+    setUpgradeError('');
     try {
       const planLimits: Record<string, number> = { free: 1, core: 3, pro: 6, pro_plus: 12 };
-      const { data, error } = await profiles.update(user.id, {
+      const { error } = await profiles.update(user.id, {
         subscription_plan: selectedPlan,
         trial_started_at: new Date().toISOString(),
         trial_used: true,
         max_employees: planLimits[selectedPlan] ?? 1
       });
-
       if (error) throw new Error(error);
-
       onClose();
       window.location.reload();
-    } catch (error) {
-      console.error('Trial activation error:', error);
+    } catch (err) {
       setUpgradeError('Something went wrong. Please try again.');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleCardNumberChange = (value: string) => {
-    const cleaned = value.replace(/\D/g, '');
-    const formatted = cleaned.replace(/(\d{4})/g, '$1 ').trim();
-    setCardNumber(formatted.substring(0, 19));
-  };
-
-  const handleExpiryChange = (value: string) => {
-    const cleaned = value.replace(/\D/g, '');
-    if (cleaned.length >= 2) {
-      setExpiryDate(cleaned.substring(0, 2) + '/' + cleaned.substring(2, 4));
-    } else {
-      setExpiryDate(cleaned);
+  const handlePayWithPesawise = async () => {
+    if (!user) return;
+    setIsProcessing(true);
+    setUpgradeError('');
+    try {
+      const { data, error } = await payments.createLink(selectedPlan);
+      if (error || !data?.payment_url) throw new Error(error || 'No payment URL returned');
+      window.location.href = data.payment_url;
+    } catch (err: any) {
+      setUpgradeError(err.message || 'Failed to create payment link. Please try again.');
+      setIsProcessing(false);
     }
   };
-
-  const handleCvvChange = (value: string) => {
-    const cleaned = value.replace(/\D/g, '');
-    setCvv(cleaned.substring(0, 3));
-  };
-
-  if (showPaymentForm) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-          <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-            <button
-              onClick={() => setShowPaymentForm(false)}
-              className="p-2 hover:bg-gray-100 rounded-lg"
-            >
-              <ArrowLeft className="w-6 h-6 text-gray-600" />
-            </button>
-            <h2 className="text-xl font-bold text-gray-900">Add Payment Method</h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg"
-            >
-              <X className="w-6 h-6 text-gray-600" />
-            </button>
-          </div>
-
-          <div className="p-6 space-y-6">
-            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border border-blue-200">
-              <p className="text-sm text-gray-700">
-                Your card will not be charged during the 14-day free trial. You can cancel anytime.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Card Number
-              </label>
-              <input
-                type="text"
-                value={cardNumber}
-                onChange={(e) => handleCardNumberChange(e.target.value)}
-                placeholder="1234 5678 9012 3456"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Expiry Date
-                </label>
-                <input
-                  type="text"
-                  value={expiryDate}
-                  onChange={(e) => handleExpiryChange(e.target.value)}
-                  placeholder="MM/YY"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  CVV
-                </label>
-                <input
-                  type="text"
-                  value={cvv}
-                  onChange={(e) => handleCvvChange(e.target.value)}
-                  placeholder="123"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Cardholder Name
-              </label>
-              <input
-                type="text"
-                value={cardName}
-                onChange={(e) => setCardName(e.target.value)}
-                placeholder="John Doe"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            {upgradeError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-red-600 text-sm text-center">{upgradeError}</p>
-              </div>
-            )}
-
-            <button
-              onClick={() => handleStartTrial(true)}
-              disabled={isProcessing || !cardNumber || !expiryDate || !cvv || !cardName}
-              className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white py-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {isProcessing ? 'Processing...' : trialUsed ? 'Subscribe Now' : 'Start 14-Day Free Trial'}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Upgrade to {plan.name}</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
+            <ArrowLeft className="w-6 h-6 text-gray-600" />
+          </button>
+          <h2 className="text-xl font-bold text-gray-900">Upgrade to {plan.name}</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
             <X className="w-6 h-6 text-gray-600" />
           </button>
         </div>
@@ -267,16 +150,16 @@ export function UpgradePlanPage({ selectedPlan, trialUsed = false, detectedCurre
             </ul>
           </div>
 
-          <div className="space-y-3">
-            {upgradeError && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-red-600 text-sm text-center">{upgradeError}</p>
-              </div>
-            )}
+          {upgradeError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-red-600 text-sm text-center">{upgradeError}</p>
+            </div>
+          )}
 
+          <div className="space-y-3">
             {!trialUsed && (
               <button
-                onClick={() => handleStartTrial(false)}
+                onClick={handleStartTrial}
                 disabled={isProcessing}
                 className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white py-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg"
               >
@@ -285,12 +168,19 @@ export function UpgradePlanPage({ selectedPlan, trialUsed = false, detectedCurre
             )}
 
             <button
-              onClick={() => setShowPaymentForm(true)}
+              onClick={handlePayWithPesawise}
               disabled={isProcessing}
-              className="w-full bg-white border-2 border-gray-300 hover:border-blue-500 text-gray-900 py-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+              className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white py-4 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-lg"
             >
-              <CreditCard className="w-5 h-5" />
-              {trialUsed ? 'Pay & Subscribe' : 'Add Payment Details'}
+              {isProcessing ? (
+                <span>Redirecting to payment...</span>
+              ) : (
+                <>
+                  <CreditCard className="w-5 h-5" />
+                  <span>{trialUsed ? 'Pay & Subscribe' : 'Pay Now'}</span>
+                  <ExternalLink className="w-4 h-4 opacity-70" />
+                </>
+              )}
             </button>
           </div>
 
@@ -314,7 +204,7 @@ export function UpgradePlanPage({ selectedPlan, trialUsed = false, detectedCurre
           {trialUsed && (
             <div className="bg-amber-50 rounded-lg p-4 border border-amber-200">
               <p className="text-sm text-amber-800 text-center">
-                Your 14-day free trial has been used. Please add payment details or contact the admin to request access.
+                Your 14-day free trial has been used. Please pay to subscribe or contact admin to request access.
               </p>
             </div>
           )}

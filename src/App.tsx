@@ -23,6 +23,7 @@ import { ManageEmployeesPage } from './components/pages/ManageEmployeesPage';
 import { ProfessionSelectionPage } from './components/pages/ProfessionSelectionPage';
 import { ProfilePhotoUploadPage } from './components/pages/ProfilePhotoUploadPage';
 import { LinkedAccountsPage } from './components/pages/LinkedAccountsPage';
+import { PaymentResultPage } from './components/pages/PaymentResultPage';
 import { ReferFriendModal } from './components/common/ReferFriendModal';
 import { OrientationLock } from './components/common/OrientationLock';
 import { AdPlayer } from './components/common/AdPlayer';
@@ -252,6 +253,8 @@ function AppContent() {
         return <ManageEmployeesPage {...pageProps} />;
       case 'linked-accounts':
         return <LinkedAccountsPage />;
+      case 'payment-result':
+        return <PaymentResultPage />;
       case 'admin':
         return user.role === 'admin' ? <AdminDashboard {...pageProps} /> : <EmployeeHome {...pageProps} />;
       case 'home':
